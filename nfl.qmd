@@ -1,0 +1,331 @@
+---
+title: "NFL Team Performance Report"
+format: 
+  html:
+    theme: flatly
+    toc: true
+    toc-depth: 2
+    code-fold: false
+editor: visual
+---
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+
+library(knitr)
+library(tidyverse)
+library(gt)
+library(nflverse)
+
+game_outcomes <- load_schedules(season = 2024)  # Adjust the year if necessary
+
+steelers_games <- game_outcomes %>% filter(home_team == "PIT" | away_team == "PIT")
+
+steelers_games_filtered <- steelers_games %>%
+  filter(!is.na(home_score) & !is.na(away_score)) %>%
+  mutate(
+    points_scored = ifelse(home_team == "PIT", home_score, away_score),
+    points_allowed = ifelse(home_team == "PIT", away_score, home_score),
+    point_differential = points_scored - points_allowed
+  )
+
+total_point_differential <- sum(steelers_games_filtered$point_differential)
+
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+
+completed_games <- game_outcomes %>%
+  filter(!is.na(home_score) & !is.na(away_score))
+
+home_stats <- completed_games %>%
+  mutate(
+    team = home_team,
+    points_scored = home_score,
+    points_allowed = away_score,
+    win = ifelse(home_score > away_score, 1, 0),
+    loss = ifelse(home_score < away_score, 1, 0)
+  ) %>%
+  select(team, points_scored, points_allowed, win, loss)
+
+away_stats <- completed_games %>%
+  mutate(
+    team = away_team,
+    points_scored = away_score,
+    points_allowed = home_score,
+    win = ifelse(away_score > home_score, 1, 0),
+    loss = ifelse(away_score < home_score, 1, 0)
+  ) %>%
+  select(team, points_scored, points_allowed, win, loss)
+
+team_stats <- bind_rows(home_stats, away_stats)
+
+team_summary <- team_stats %>%
+  group_by(team) %>%
+  summarise(
+    point_differential = sum(points_scored) - sum(points_allowed),
+    wins = sum(win),
+    losses = sum(loss)
+  ) %>%
+  ungroup() %>%
+  arrange(desc(point_differential))
+
+team_summary_gt <- team_summary %>%
+  gt() %>%
+  tab_header(
+    title = "NFL Team Performance Summary",
+    subtitle = "Point Differential, Wins, and Losses for the Current Season"
+  ) %>%
+  cols_label(
+    team = "Team",
+    point_differential = "Point Differential",
+    wins = "Wins",
+    losses = "Losses"
+  ) %>%
+  fmt_number(
+    columns = c(point_differential, wins, losses),
+    decimals = 0
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  ) %>%
+  data_color(
+    columns = point_differential,
+    colors = scales::col_numeric(
+      palette = c("red", "white", "green"),
+      domain = c(min(team_summary$point_differential), max(team_summary$point_differential))
+    )
+  ) %>%
+  tab_options(
+    table.font.size = "medium",
+    table.width = pct(100)
+  )
+
+team_summary_gt
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+
+library(ggrepel)
+
+team_summary %>%
+  mutate(
+    win_pct = wins / (wins + losses),
+    team_label = team
+  ) %>%
+  ggplot(aes(x = point_differential, y = win_pct)) +
+  geom_point(color = "blue", size = 3) +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  geom_text_repel(aes(label = team_label), 
+                  size = 4, 
+                  box.padding = 0.3, 
+                  point.padding = 0.3,
+                  max.overlaps = 15) +
+  labs(
+    title = "Winning Percentage vs. Point Differential",
+    x = "Point Differential",
+    y = "Winning Percentage"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+#| fig-cap: "Point Differential by Team"
+library(forcats)
+
+team_summary %>%
+  mutate(team = fct_reorder(team, point_differential)) %>%
+  ggplot(aes(x = team, y = point_differential, fill = point_differential)) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  labs(
+    x = "Team",
+    y = "Point Differential",
+    title = "Point Differential Across Teams"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+
+initial_rating <- 1500
+ratings <- team_summary %>% mutate(rating = initial_rating)
+
+completed_games <- completed_games %>%
+  mutate(gameday = as.Date(gameday, format = "%Y-%m-%d")) %>%
+  arrange(week)
+
+unique_weeks <- unique(completed_games$week)
+
+for (w in unique_weeks) {
+  weekly_games <- completed_games %>% filter(week == w)
+  
+  weekly_games_with_ratings <- weekly_games %>%
+    left_join(ratings, by = c("home_team" = "team")) %>%
+    rename(home_rating = rating) %>%
+    left_join(ratings, by = c("away_team" = "team")) %>%
+    rename(away_rating = rating) %>%
+    mutate(
+      home_expected = 1 / (1 + 10 ^ ((away_rating - home_rating) / 400)),
+      away_expected = 1 - home_expected,
+      home_result = ifelse(home_score > away_score, 1, 0),
+      away_result = ifelse(away_score > home_score, 1, 0),
+      home_rating_change = 20 * (home_result - home_expected),
+      away_rating_change = 20 * (away_result - away_expected)
+    )
+  
+  # Update ratings
+  ratings <- ratings %>%
+    left_join(
+      weekly_games_with_ratings %>% group_by(home_team) %>%
+        summarise(rating_change = sum(home_rating_change)),
+      by = c("team" = "home_team")
+    ) %>%
+    mutate(rating = rating + coalesce(rating_change, 0)) %>%
+    select(-rating_change) %>%
+    left_join(
+      weekly_games_with_ratings %>% group_by(away_team) %>%
+        summarise(rating_change = sum(away_rating_change)),
+      by = c("team" = "away_team")
+    ) %>%
+    mutate(rating = rating + coalesce(rating_change, 0)) %>%
+    select(-rating_change)
+}
+
+final_rankings <- ratings %>%
+  arrange(desc(rating)) %>%
+  mutate(rank = row_number())
+
+final_rankings_gt <- final_rankings %>%
+  gt() %>%
+  tab_header(
+    title = "NFL Team Rankings Considering Opponent Strength",
+    subtitle = "Elo-Style Ratings for Current Season"
+  ) %>%
+  cols_label(
+    team = "Team",
+    rating = "Rating",
+    rank = "Rank"
+  ) %>%
+  fmt_number(
+    columns = rating,
+    decimals = 1
+  ) %>%
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_column_labels(everything())
+  )
+
+final_rankings_gt
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+#| fig-cap: "Elo Rating vs. Winning Percentage"
+
+# Merge Elo Ratings with Team Summary to Calculate Winning Percentage
+elo_win_df <- final_rankings %>%
+  left_join(
+    team_summary %>% 
+      mutate(win_pct = wins / (wins + losses)),
+    by = "team"
+  )
+
+# Plot Winning Percentage vs. Elo Rating
+elo_win_df %>%
+  ggplot(aes(x = rating, y = win_pct)) +
+  geom_point(color = "darkgreen", size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", color = "orange", se = FALSE) +
+  geom_text_repel(aes(label = team), 
+                  size = 3.5, 
+                  box.padding = 0.3, 
+                  point.padding = 0.3,
+                  max.overlaps = 15) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  labs(
+    title = "Winning Percentage vs. Elo Rating",
+    x = "Elo Rating",
+    y = "Winning Percentage"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+
+```{r}
+#| echo: false
+#| warning: false
+#| error: false
+
+last_game_date <- max(completed_games$gameday, na.rm = TRUE)
+
+next_steelers_game <- game_outcomes %>%
+  filter((home_team == "PIT" | away_team == "PIT") & gameday > last_game_date) %>%
+  arrange(gameday) %>%
+  slice(1)
+
+if (nrow(next_steelers_game) == 0) {
+  "No game scheduled for the next week for the Pittsburgh Steelers."
+} else {
+  if (next_steelers_game$home_team == "PIT") {
+    opponent_team <- next_steelers_game$away_team
+  } else {
+    opponent_team <- next_steelers_game$home_team
+  }
+
+  opponent_rating <- ratings %>%
+    filter(team == opponent_team) %>%
+    pull(rating)
+
+  steelers_rating <- ratings %>%
+    filter(team == "PIT") %>%
+    pull(rating)
+
+  steelers_win_probability <- 1 / (1 + 10 ^ ((opponent_rating - steelers_rating) / 400))
+  
+  game_date <- next_steelers_game$gameday
+
+  cat("**Pittsburgh Steelers Next Game:**\n\n")
+  cat("Opponent: ", opponent_team, "\n")
+  cat("Game Date: ", game_date, "\n")
+  cat("Estimated Win Probability (Elo): ", round(steelers_win_probability * 100, 2), "%\n\n")
+
+  # Monte Carlo Simulation
+  set.seed(42)
+  num_simulations <- 10000
+  simulated_outcomes <- replicate(num_simulations, {
+    if (runif(1) < steelers_win_probability) {
+      return("Win")
+    } else {
+      return("Loss")
+    }
+  })
+  
+  simulated_win_probability <- mean(simulated_outcomes == "Win")
+
+  cat("Monte Carlo Simulated Win Probability: ", round(simulated_win_probability * 100, 2), "%\n")
+}
+
+
+```
