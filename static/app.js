@@ -20,17 +20,21 @@ async function load(refresh = false) {
   $("retry").disabled = true;
   $("phase").disabled = true;
   $("season").disabled = true;
+  $("team").disabled = true;
   $("loading").hidden = Boolean(dashboard);
   $("error").hidden = true;
   $("refresh").querySelector("span").textContent = "Updating…";
-  const query = new URLSearchParams({phase: $("phase").value});
+  const query = new URLSearchParams({phase: $("phase").value, team: $("team").value});
   if (dashboard) query.set("season", $("season").value);
   try {
     const response = await fetch(`${refresh ? "/api/refresh" : "/api/dashboard"}?${query}`, {method:refresh ? "POST" : "GET"});
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || "The schedule could not be loaded.");
     if (current !== requestNumber) return;
+    if (dashboard && dashboard.team.code !== result.team.code) $("team-search").value = "";
     dashboard = result;
+    $("team").value = result.team.code;
+    try { localStorage.setItem("nfl-dashboard-team", result.team.code); } catch { /* Storage may be disabled. */ }
     $("season").innerHTML = result.seasons.map(s => `<option value="${s}">${s}</option>`).join("");
     $("season").value = String(result.season);
     $("phase").value = result.include_playoffs ? "all" : "regular";
@@ -50,14 +54,28 @@ async function load(refresh = false) {
       $("retry").disabled = false;
       $("phase").disabled = false;
       $("season").disabled = !dashboard;
+      $("team").disabled = false;
       $("refresh").querySelector("span").textContent = "Refresh data";
     }
   }
 }
 
 function render() {
-  const d = dashboard, s = d.steelers;
-  $("season-heading").textContent = `PITTSBURGH / ${d.season} ${d.include_playoffs ? "SEASON + PLAYOFFS" : "REGULAR SEASON"}`;
+  const d = dashboard, s = d.team_stats, team = d.team;
+  document.body.dataset.team = team.code;
+  document.title = `${team.short_name} · Season Dashboard`;
+  $("brand-team").textContent = team.short_name.toUpperCase();
+  $("brand-mark").textContent = team.short_name[0];
+  $("brand").setAttribute("aria-label", `${team.short_name} dashboard home`);
+  $("favicon").href = team.code === "MIN" ? "/favicon-vikings.svg" : "/favicon.svg";
+  $("team-tagline").textContent = team.tagline;
+  $("intro-copy").textContent = `Every result. The next matchup. A clearer view of ${team.city}’s season.`;
+  $("metrics").setAttribute("aria-label", `${team.short_name} season statistics`);
+  $("division-heading").textContent = team.division;
+  $("schedule-heading").textContent = `The ${team.short_name} schedule`;
+  $("rankings-heading").textContent = `How ${team.city} stacks up`;
+  $("team-footer").textContent = `Made for the ${team.code === "MIN" ? "purple" : "black"} & gold.`;
+  $("season-heading").textContent = `${team.city.toUpperCase()} / ${d.season} ${d.include_playoffs ? "SEASON + PLAYOFFS" : "REGULAR SEASON"}`;
   $("form").innerHTML = d.form.length ? d.form.map(r => `<span class="form-badge ${r}">${r}</span>`).join("") : '<span class="muted">NO RESULTS YET</span>';
   $("metrics").innerHTML = [
     ["SEASON RECORD", record(s), `${s.games} games played`],
@@ -86,21 +104,21 @@ function renderNext() {
   const g = dashboard.next_game;
   $("next-week").hidden = !g;
   if (!g) {
-    $("next-game").innerHTML = '<div class="empty">No unplayed Steelers games are listed in this view. Try another season or include playoffs.</div>';
+    $("next-game").innerHTML = `<div class="empty">No unplayed ${esc(dashboard.team.short_name)} games are listed in this view. Try another season or include playoffs.</div>`;
     return;
   }
   $("next-week").textContent = gameLabel(g);
   const overdue = g.date < new Date().toLocaleDateString("en-CA");
-  $("next-game").innerHTML = `<p class="muted">PITTSBURGH STEELERS ${g.venue === "Away" ? "AT" : "VS"}</p>
+  $("next-game").innerHTML = `<p class="muted">${esc(dashboard.team.name.toUpperCase())} ${g.venue === "Away" ? "AT" : "VS"}</p>
     <div class="opponent">${esc(g.opponent_name)}</div>
     <p class="game-meta">${esc(dateLabel(g.date))}${g.kickoff ? ` · ${esc(g.kickoff)} ET` : " · Time TBD"} · ${esc(g.venue)}${g.stadium ? `<br>${esc(g.stadium)}` : ""}</p>
-    <div class="probability"><strong>${pct(g.win_probability)}</strong><span>Steelers win probability</span></div>
+    <div class="probability"><strong>${pct(g.win_probability)}</strong><span>${esc(dashboard.team.short_name)} win probability</span></div>
     <div class="prob-track"><div class="prob-fill" id="matchup-fill"></div></div>
-    <div class="matchup-detail"><span>PIT ${pct(g.win_probability)}</span><span>${esc(g.opponent)} ${pct(1 - g.win_probability)}</span></div>
+    <div class="matchup-detail"><span>${esc(dashboard.team.code)} ${pct(g.win_probability)}</span><span>${esc(g.opponent)} ${pct(1 - g.win_probability)}</span></div>
     <p class="caption">Elo estimate with ${g.venue === "Neutral" ? "no home-field adjustment" : "home-field advantage"}.${overdue ? " This date has passed; the provider has not supplied a final score." : ""}</p>`;
   // SVGs and width attributes avoid inline styles under the app's CSP.
   const fill = $("matchup-fill");
-  fill.replaceWith(svg(`<rect width="${(g.win_probability * 100).toFixed(2)}" height="7" fill="#ffb612"/>`, "0 0 100 7", "Steelers estimated chance of winning", "none"));
+  fill.replaceWith(svg(`<rect width="${(g.win_probability * 100).toFixed(2)}" height="7" fill="var(--accent)"/>`, "0 0 100 7", `${dashboard.team.short_name} estimated chance of winning`, "none"));
 }
 
 function svg(content, viewBox, label, aspect = "xMidYMid meet") {
@@ -139,11 +157,11 @@ function renderTrend() {
   const grid = [high, 0, low].map(v => `<line class="${v === 0 ? "zero" : "grid"}" x1="46" y1="${y(v)}" x2="496" y2="${y(v)}"/><text x="37" y="${y(v) + 4}" text-anchor="end">${signed(v)}</text>`).join("");
   const points = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
   const dots = results.map((g, i) => `<circle class="dot" cx="${x(i + 1)}" cy="${y(g.cumulative)}" r="3.5"><title>${esc(gameLabel(g))} vs ${esc(g.opponent)}: ${signed(g.cumulative)}</title></circle>`).join("");
-  $("trend").replaceChildren(svg(`${grid}<polyline class="line" points="${points}"/>${dots}<text x="46" y="192">Start</text><text x="496" y="192" text-anchor="end">${esc(gameLabel(results.at(-1)))}</text>`, "0 0 520 205", `Steelers cumulative point differential, ending at ${signed(results.at(-1).cumulative)}.`));
+  $("trend").replaceChildren(svg(`${grid}<polyline class="line" points="${points}"/>${dots}<text x="46" y="192">Start</text><text x="496" y="192" text-anchor="end">${esc(gameLabel(results.at(-1)))}</text>`, "0 0 520 205", `${dashboard.team.short_name} cumulative point differential, ending at ${signed(results.at(-1).cumulative)}.`));
 }
 
 function renderDivision() {
-  $("division").innerHTML = `<table><caption class="sr-only">AFC North comparison</caption><thead><tr><th>Team</th><th>Record</th><th>Win %</th><th>+ / −</th></tr></thead><tbody>${dashboard.division.map(r => `<tr class="${r.team === "PIT" ? "steelers" : ""}"><td class="team">${esc(r.team)}</td><td>${record(r)}</td><td>${pct(r.win_pct)}</td><td class="${color(r.differential)}">${signed(r.differential)}</td></tr>`).join("")}</tbody></table>`;
+  $("division").innerHTML = `<table><caption class="sr-only">${esc(dashboard.team.division)} comparison</caption><thead><tr><th>Team</th><th>Record</th><th>Win %</th><th>+ / −</th></tr></thead><tbody>${dashboard.division.map(r => `<tr class="${r.team === dashboard.team.code ? "selected-team" : ""}"><td class="team">${esc(r.team)}</td><td>${record(r)}</td><td>${pct(r.win_pct)}</td><td class="${color(r.differential)}">${signed(r.differential)}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function renderSchedule() {
@@ -152,7 +170,7 @@ function renderSchedule() {
     $("schedule").innerHTML = '<p class="empty">No games match this filter.</p>';
     return;
   }
-  $("schedule").innerHTML = `<table><caption class="sr-only">Steelers schedule and results</caption><thead><tr><th>Game</th><th>Date</th><th>Opponent</th><th>Venue</th><th>Result / PIT score</th><th>+ / −</th><th>PIT win chance</th></tr></thead><tbody>${games.map(g => `<tr><td>${esc(gameLabel(g))}</td><td>${esc(dateLabel(g.date))}</td><td class="team opponent-cell">${esc(g.opponent_name)}<span>${g.kickoff ? `${esc(g.kickoff)} ET` : "Time TBD"}</span></td><td>${esc(g.venue)}</td><td>${g.result ? `<span class="result-badge ${g.result}">${g.result}</span>${g.scored}–${g.allowed}` : "Upcoming"}</td><td class="${color(g.differential)}">${g.differential == null ? "—" : signed(g.differential)}</td><td>${pct(g.win_probability)}</td></tr>`).join("")}</tbody></table>`;
+  $("schedule").innerHTML = `<table><caption class="sr-only">${esc(dashboard.team.short_name)} schedule and results</caption><thead><tr><th>Game</th><th>Date</th><th>Opponent</th><th>Venue</th><th>Result / ${esc(dashboard.team.code)} score</th><th>+ / −</th><th>${esc(dashboard.team.code)} win chance</th></tr></thead><tbody>${games.map(g => `<tr><td>${esc(gameLabel(g))}</td><td>${esc(dateLabel(g.date))}</td><td class="team opponent-cell">${esc(g.opponent_name)}<span>${g.kickoff ? `${esc(g.kickoff)} ET` : "Time TBD"}</span></td><td>${esc(g.venue)}</td><td>${g.result ? `<span class="result-badge ${g.result}">${g.result}</span>${g.scored}–${g.allowed}` : "Upcoming"}</td><td class="${color(g.differential)}">${g.differential == null ? "—" : signed(g.differential)}</td><td>${pct(g.win_probability)}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function renderRankings() {
@@ -166,13 +184,14 @@ function renderRankings() {
     return sortDirection * (a[sortKey] - b[sortKey]);
   });
   const cols = [["rank", "Elo rank"], ["name", "Team"], ["wins", "W"], ["losses", "L"], ["ties", "T"], ["win_pct", "Win %"], ["pf", "PF"], ["pa", "PA"], ["differential", "+ / −"], ["rating", "Elo"]];
-  $("rankings").innerHTML = `<table><caption class="sr-only">NFL team records and Elo rankings</caption><thead><tr>${cols.map(([key, label]) => `<th${sortKey === key ? ` aria-sort="${sortDirection === 1 ? "ascending" : "descending"}"` : ""}><button data-sort="${key}">${label}${sortKey === key ? (sortDirection === 1 ? " ↑" : " ↓") : ""}</button></th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr class="${r.team === "PIT" ? "steelers" : ""}"><td>${r.rank}</td><td class="team">${esc(r.name)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${r.ties}</td><td>${pct(r.win_pct)}</td><td>${r.pf}</td><td>${r.pa}</td><td class="${color(r.differential)}">${signed(r.differential)}</td><td>${r.rating.toFixed(1)}</td></tr>`).join("") || '<tr><td colspan="10">No matching teams.</td></tr>'}</tbody></table>`;
+  $("rankings").innerHTML = `<table><caption class="sr-only">NFL team records and Elo rankings</caption><thead><tr>${cols.map(([key, label]) => `<th${sortKey === key ? ` aria-sort="${sortDirection === 1 ? "ascending" : "descending"}"` : ""}><button data-sort="${key}">${label}${sortKey === key ? (sortDirection === 1 ? " ↑" : " ↓") : ""}</button></th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr class="${r.team === dashboard.team.code ? "selected-team" : ""}"><td>${r.rank}</td><td class="team">${esc(r.name)}</td><td>${r.wins}</td><td>${r.losses}</td><td>${r.ties}</td><td>${pct(r.win_pct)}</td><td>${r.pf}</td><td>${r.pa}</td><td class="${color(r.differential)}">${signed(r.differential)}</td><td>${r.rating.toFixed(1)}</td></tr>`).join("") || '<tr><td colspan="10">No matching teams.</td></tr>'}</tbody></table>`;
 }
 
 $("refresh").addEventListener("click", () => load(true));
 $("retry").addEventListener("click", () => load(true));
 $("season").addEventListener("change", () => load());
 $("phase").addEventListener("change", () => load());
+$("team").addEventListener("change", () => load());
 $("team-search").addEventListener("input", () => dashboard && renderRankings());
 document.querySelector(".segmented").addEventListener("click", event => {
   const button = event.target.closest("button[data-filter]");
@@ -188,4 +207,8 @@ $("rankings").addEventListener("click", event => {
   sortKey = button.dataset.sort;
   renderRankings();
 });
+try {
+  const savedTeam = localStorage.getItem("nfl-dashboard-team");
+  if (["PIT", "MIN"].includes(savedTeam)) $("team").value = savedTeam;
+} catch { /* The dashboard also works without browser storage. */ }
 load();

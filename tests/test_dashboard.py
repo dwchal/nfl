@@ -21,6 +21,11 @@ c,2026,REG,3,2026-09-24,PIT,CLE,,,Home
 d,2026,PRE,0,2026-08-01,PIT,BAL,0,14,Home
 e,2026,WC,19,2027-01-17,PIT,BAL,10,24,Home
 """
+VIKINGS_ROWS = """min_a,2026,REG,1,2026-09-03,MIN,GB,24,10,Home
+min_b,2026,REG,2,2026-09-10,DET,MIN,14,7,Home
+min_c,2026,REG,3,2026-09-24,CHI,MIN,,,Home
+min_d,2026,WC,19,2027-01-17,MIN,GB,21,14,Home
+"""
 
 
 class AnalysisTests(unittest.TestCase):
@@ -63,9 +68,9 @@ class AnalysisTests(unittest.TestCase):
     def test_regular_view_excludes_playoffs_from_stats_and_ratings(self):
         regular = build_dashboard(self.games, 2026, simulations=200)
         all_games = build_dashboard(self.games, 2026, True, simulations=200)
-        self.assertEqual(regular["steelers"]["losses"], 0)
-        self.assertEqual(all_games["steelers"]["losses"], 1)
-        self.assertGreater(regular["steelers"]["rating"], all_games["steelers"]["rating"])
+        self.assertEqual(regular["team_stats"]["losses"], 0)
+        self.assertEqual(all_games["team_stats"]["losses"], 1)
+        self.assertGreater(regular["team_stats"]["rating"], all_games["team_stats"]["rating"])
         self.assertEqual(regular["projection"], all_games["projection"])
         self.assertEqual(regular["next_game"]["opponent"], "CLE")
         self.assertIsNone(regular["schedule"][0]["win_probability"])
@@ -101,6 +106,44 @@ class AnalysisTests(unittest.TestCase):
             parse_games(CSV.replace("21,14", "-1,14"))
         reversed_csv = "\n".join([CSV.splitlines()[0], *reversed(CSV.splitlines()[1:])])
         self.assertEqual([g.id for g in parse_games(reversed_csv)], ["a", "b", "c", "e"])
+
+    def test_vikings_use_their_own_record_schedule_and_division(self):
+        games = parse_games(CSV + VIKINGS_ROWS)
+        vikings = build_dashboard(games, 2026, simulations=200, team="MIN")
+        self.assertEqual(vikings["team"]["name"], "Minnesota Vikings")
+        self.assertEqual(vikings["team"]["division"], "NFC North")
+        self.assertEqual({r["team"] for r in vikings["division"]}, {"MIN", "GB", "CHI", "DET"})
+        stats = vikings["team_stats"]
+        self.assertEqual((stats["wins"], stats["losses"], stats["ties"]), (1, 1, 0))
+        self.assertEqual((stats["pf"], stats["pa"], stats["differential"]), (31, 24, 7))
+        self.assertEqual(vikings["form"], ["W", "L"])
+        self.assertEqual(len(vikings["elo_history"]), 2)
+        self.assertEqual([g["opponent"] for g in vikings["schedule"]], ["GB", "DET", "CHI"])
+        self.assertEqual(vikings["next_game"]["venue"], "Away")
+        ratings, _ = elo_ratings([g for g in games if g.kind == "REG"], 2026, "MIN")
+        self.assertAlmostEqual(vikings["next_game"]["win_probability"],
+                               1 - home_probability(ratings["CHI"], ratings["MIN"]), places=4)
+        self.assertEqual(vikings["projection"]["remaining"], 1)
+        self.assertEqual(vikings["projection"]["total_games"], 3)
+        self.assertTrue(all(r["ties"] == 0 for r in vikings["projection"]["distribution"]))
+        playoffs = build_dashboard(games, 2026, True, 200, team="MIN")
+        self.assertEqual(playoffs["team_stats"]["wins"], 2)
+        self.assertEqual(playoffs["projection"], vikings["projection"])
+
+    def test_team_selection_validation_and_default(self):
+        self.assertEqual(build_dashboard(self.games, simulations=100)["team"]["code"], "PIT")
+        with self.assertRaisesRegex(ValueError, "Choose"):
+            build_dashboard(self.games, team="DAL")
+        with self.assertRaisesRegex(ValueError, "No Vikings games"):
+            build_dashboard(self.games, team="MIN")
+
+    def test_projection_counts_selected_team_only(self):
+        remaining = parse_games(CSV + VIKINGS_ROWS)
+        remaining = [g for g in remaining if not g.completed]
+        # Strong Vikings win on the road in every deterministic sample. Other games don't add wins.
+        result = project_season(remaining, {"MIN": 3000, "CHI": 0}, 1, 1, 0, 100, team="MIN")
+        self.assertEqual(result["expected_wins"], 2)
+        self.assertEqual(result["distribution"], [{"wins": 2, "losses": 1, "ties": 0, "probability": 1.0}])
 
 
 class CacheTests(unittest.TestCase):
@@ -141,7 +184,7 @@ class ServerTests(unittest.TestCase):
     def setUpClass(cls):
         cls.directory = tempfile.TemporaryDirectory()
         cls.path = Path(cls.directory.name) / "games.csv"
-        cls.path.write_text(CSV)
+        cls.path.write_text(CSV + VIKINGS_ROWS)
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(ScheduleStore(cls.path, source_file=cls.path)))
         cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
         cls.thread.start()
@@ -157,13 +200,26 @@ class ServerTests(unittest.TestCase):
     def test_dashboard_endpoint_and_input_validation(self):
         with urlopen(self.base + "/api/dashboard?season=2026") as response:
             body = json.load(response)
-            self.assertEqual(body["steelers"]["ties"], 1)
+            self.assertEqual(body["team_stats"]["ties"], 1)
             self.assertIn("downloaded_at", body["data"])
-        for query in ("season=banana", "season=1900", "phase=unknown"):
+        for query in ("season=banana", "season=1900", "phase=unknown", "team=DAL"):
             with self.assertRaises(HTTPError) as error:
                 urlopen(self.base + "/api/dashboard?" + query)
             self.assertEqual(error.exception.code, 400)
             error.exception.close()
+
+    def test_switching_team_does_not_reuse_the_other_teams_dashboard(self):
+        def dashboard(team):
+            with urlopen(self.base + f"/api/dashboard?season=2026&team={team}") as response:
+                return json.load(response)
+        steelers = dashboard("PIT")
+        vikings = dashboard("MIN")
+        self.assertEqual(vikings["team_stats"]["team"], "MIN")
+        self.assertEqual(vikings["team_stats"]["ties"], 0)
+        self.assertEqual(vikings["next_game"]["opponent"], "CHI")
+        self.assertEqual(dashboard("PIT"), steelers)
+        with urlopen(Request(self.base + "/api/refresh?season=2026&team=MIN", method="POST")) as response:
+            self.assertEqual(json.load(response)["team_stats"]["team"], "MIN")
 
     def test_assets_are_restricted_to_public_files(self):
         with urlopen(self.base) as response:

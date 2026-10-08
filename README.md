@@ -1,6 +1,6 @@
-# Steelers Season Dashboard
+# Steelers & Vikings Season Dashboard
 
-A Steelers-focused NFL dashboard that runs locally on your Mac with **Python 3.10 or newer**. No R, virtual environment, package installation, API key, or account is required. The browser interface is served by Python’s standard library.
+A dashboard for the **Pittsburgh Steelers and Minnesota Vikings** that runs locally on your Mac with **Python 3.10 or newer**. No R, virtual environment, package installation, API key, or account is required. The browser interface is served by Python’s standard library.
 
 ## Run on this Mac
 
@@ -19,11 +19,12 @@ On a fresh clone, if Finder does not allow launching the command file, run `pyth
 
 ## What it shows
 
-- Steelers record, winning percentage, point differential, recent form, and Elo rank.
-- Next unplayed Steelers matchup, venue, date, Eastern kickoff time, and an estimated win probability.
+- A team selector for Steelers or Vikings, with team colors and your choice remembered between visits. Pittsburgh is the default on a first visit.
+- Selected team’s record, winning percentage, point differential, recent form, and Elo rank.
+- Next unplayed matchup, venue, date, Eastern kickoff time, and an estimated win probability.
 - Regular-season win projection from 10,000 simulations, with the middle 80% range and outcome distribution.
-- Cumulative point differential, AFC North comparison, and a filterable Steelers schedule.
-- Searchable NFL rankings with sortable columns and Pittsburgh highlighted.
+- Cumulative point differential, AFC North or NFC North comparison, and a filterable team schedule.
+- Searchable NFL rankings with sortable columns and your selected team highlighted.
 - Season selection, optional postseason results, refresh controls, download timestamp, and offline status.
 
 The default season follows the NFL calendar (January–February belong to the preceding year), with a fallback to the latest season available in the feed. Seasons are no longer hardcoded to 2024. Preseason games are excluded. The regular-season view excludes playoff results from records and current-season ratings; “Regular + playoffs” includes them. The outlook always predicts the **regular-season record**. A finished season shows its final record rather than inventing another matchup.
@@ -44,6 +45,7 @@ python3 app.py --port 9000              # Choose a port
 python3 app.py --offline                # Use saved data only
 python3 app.py --data /path/to/games.csv # Use a local nflverse-format file
 python3 app.py --check                  # Download/load data and validate calculations
+python3 app.py --check --team MIN       # Validate Vikings calculations
 python3 -m unittest discover -s tests -v
 ```
 

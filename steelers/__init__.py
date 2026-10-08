@@ -1,1 +1,1 @@
-"""Steelers-focused NFL analysis, using only the Python standard library."""
+"""Steelers and Vikings analysis, using only the Python standard library."""

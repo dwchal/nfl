@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the local Steelers dashboard. No third-party packages required."""
+"""Launch the local Steelers and Vikings dashboard. No third-party packages required."""
 
 import argparse
 import json
@@ -11,7 +11,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from steelers.analysis import build_dashboard
+from steelers.analysis import SUPPORTED_TEAMS, build_dashboard
 from steelers.data import DataUnavailable, ScheduleStore
 
 ROOT = Path(__file__).resolve().parent
@@ -44,7 +44,7 @@ def make_handler(store):
                 return self.dashboard(parse_qs(parsed.query))
             # Explicit routes avoid exposing cache files, repository contents, or traversal.
             assets = {"/": "index.html", "/app.js": "app.js", "/style.css": "style.css",
-                      "/favicon.svg": "favicon.svg"}
+                      "/favicon.svg": "favicon.svg", "/favicon-vikings.svg": "favicon-vikings.svg"}
             if parsed.path not in assets:
                 return self.send(404, {"error": "Not found"})
             path = ROOT / "static" / assets[parsed.path]
@@ -63,13 +63,16 @@ def make_handler(store):
             try:
                 season = int(query["season"][0]) if "season" in query else None
                 phase = query.get("phase", ["regular"])[0]
+                team = query.get("team", ["PIT"])[0]
+                if team not in SUPPORTED_TEAMS:
+                    raise ValueError("Choose the Pittsburgh Steelers (PIT) or Minnesota Vikings (MIN).")
                 if phase not in {"regular", "all"}:
                     raise ValueError("Choose regular season or regular season + playoffs.")
                 games, metadata = store.load(refresh)
-                key = (metadata["downloaded_at"], season, phase)
+                key = (metadata["downloaded_at"], season, phase, team)
                 with analysis_lock:
                     if key not in dashboards:
-                        dashboards[key] = build_dashboard(games, season, phase == "all")
+                        dashboards[key] = build_dashboard(games, season, phase == "all", team=team)
                         if len(dashboards) > 8:
                             dashboards.popitem(last=False)
                     result = dict(dashboards[key])
@@ -87,22 +90,23 @@ def make_handler(store):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Steelers dashboard · Python standard library only")
+    parser = argparse.ArgumentParser(description="Steelers & Vikings dashboard · Python standard library only")
     parser.add_argument("--port", type=int, default=8765)
     parser.add_argument("--no-browser", action="store_true")
     parser.add_argument("--offline", action="store_true", help="Use only saved data")
     parser.add_argument("--data", type=Path, help="Use a local nflverse games.csv")
     parser.add_argument("--check", action="store_true", help="Load data, calculate dashboard, and exit")
+    parser.add_argument("--team", choices=SUPPORTED_TEAMS, default="PIT", help="Team for --check (default: PIT)")
     args = parser.parse_args()
     store = ScheduleStore(ROOT / ".cache" / "games.csv", args.offline, args.data)
     if args.check:
         try:
             games, metadata = store.load()
-            dashboard = build_dashboard(games)
+            dashboard = build_dashboard(games, team=args.team)
         except (DataUnavailable, ValueError) as error:
             parser.exit(1, f"{error}\n")
-        s = dashboard["steelers"]
-        print(f"Season {dashboard['season']} · Steelers {s['wins']}-{s['losses']}-{s['ties']} · Elo {s['rating']} · {len(games):,} games loaded")
+        s = dashboard["team_stats"]
+        print(f"Season {dashboard['season']} · {dashboard['team']['short_name']} {s['wins']}-{s['losses']}-{s['ties']} · Elo {s['rating']} · {len(games):,} games loaded")
         print(f"Data: {metadata['source']} · downloaded {metadata['downloaded_at']}")
         if metadata["warning"]:
             print(metadata["warning"])
@@ -115,7 +119,7 @@ def main():
             raise
         server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(store))
     url = f"http://127.0.0.1:{server.server_port}"
-    print(f"\nSteelers Dashboard is running at {url}\nKeep this window open. Press Control-C to stop.\n", flush=True)
+    print(f"\nSteelers & Vikings Dashboard is running at {url}\nKeep this window open. Press Control-C to stop.\n", flush=True)
     if not args.no_browser:
         webbrowser.open(url)
     try:
