@@ -11,8 +11,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from steelers.analysis import SUPPORTED_TEAMS, build_dashboard
+from steelers.analysis import SUPPORTED_TEAMS, build_dashboard, default_season
 from steelers.data import DataUnavailable, ScheduleStore
+from steelers.model import select_model
 
 ROOT = Path(__file__).resolve().parent
 
@@ -64,15 +65,18 @@ def make_handler(store):
                 season = int(query["season"][0]) if "season" in query else None
                 phase = query.get("phase", ["regular"])[0]
                 team = query.get("team", ["PIT"])[0]
+                model = query.get("model", ["auto"])[0]
                 if team not in SUPPORTED_TEAMS:
                     raise ValueError("Choose the Pittsburgh Steelers (PIT) or Minnesota Vikings (MIN).")
                 if phase not in {"regular", "all"}:
                     raise ValueError("Choose regular season or regular season + playoffs.")
+                if model not in {"auto", "baseline"}:
+                    raise ValueError("Choose the backtested default or original Elo model.")
                 games, metadata = store.load(refresh)
-                key = (metadata["downloaded_at"], season, phase, team)
+                key = (metadata["downloaded_at"], season, phase, team, model)
                 with analysis_lock:
                     if key not in dashboards:
-                        dashboards[key] = build_dashboard(games, season, phase == "all", team=team)
+                        dashboards[key] = build_dashboard(games, season, phase == "all", team=team, model=model)
                         if len(dashboards) > 8:
                             dashboards.popitem(last=False)
                     result = dict(dashboards[key])
@@ -97,17 +101,28 @@ def main():
     parser.add_argument("--data", type=Path, help="Use a local nflverse games.csv")
     parser.add_argument("--check", action="store_true", help="Load data, calculate dashboard, and exit")
     parser.add_argument("--team", choices=SUPPORTED_TEAMS, default="PIT", help="Team for --check (default: PIT)")
+    parser.add_argument("--backtest", action="store_true", help="Print historical model evaluation as JSON and exit")
+    parser.add_argument("--season", type=int, help="Season for --check or --backtest; settings use only prior seasons")
+    parser.add_argument("--model", choices=("auto", "baseline"), default="auto", help="Model for --check")
     args = parser.parse_args()
     store = ScheduleStore(ROOT / ".cache" / "games.csv", args.offline, args.data)
-    if args.check:
+    if args.check or args.backtest:
         try:
             games, metadata = store.load()
-            dashboard = build_dashboard(games, team=args.team)
+            if args.backtest:
+                season = args.season if args.season is not None else default_season(games)
+                if season not in {g.season for g in games}:
+                    raise ValueError("That season is not available in the schedule.")
+                _, report = select_model(games, season)
+                print(json.dumps({"season": season, "data": metadata, **report}, indent=2, allow_nan=False))
+                return
+            dashboard = build_dashboard(games, args.season, team=args.team, model=args.model)
         except (DataUnavailable, ValueError) as error:
             parser.exit(1, f"{error}\n")
         s = dashboard["team_stats"]
         print(f"Season {dashboard['season']} · {dashboard['team']['short_name']} {s['wins']}-{s['losses']}-{s['ties']} · Elo {s['rating']} · {len(games):,} games loaded")
         print(f"Data: {metadata['source']} · downloaded {metadata['downloaded_at']}")
+        print(f"Model: {dashboard['model']['name']}")
         if metadata["warning"]:
             print(metadata["warning"])
         return

@@ -1,0 +1,221 @@
+{
+  "season": 2026,
+  "source_url": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+  "source_sha256": "d52363f249b455914506d2d7a6b073fb5e4e48fbc9c84548f5e3e59fd355e6bd",
+  "status": "evaluated",
+  "active": {
+    "name": "Margin-aware Elo",
+    "k_factor": 20.0,
+    "home_advantage": 35.0,
+    "carryover": 0.6666666666666666,
+    "use_margin": true
+  },
+  "challenger": {
+    "name": "Margin-aware Elo",
+    "k_factor": 20.0,
+    "home_advantage": 35.0,
+    "carryover": 0.6666666666666666,
+    "use_margin": true
+  },
+  "promoted": true,
+  "tuning_seasons": [
+    2020,
+    2021,
+    2022
+  ],
+  "test_seasons": [
+    2023,
+    2024,
+    2025
+  ],
+  "candidates": 28,
+  "tuning": {
+    "games": 799,
+    "brier": 0.22179825131591552,
+    "log_loss": 0.638332639739115,
+    "accuracy": 0.6364779874213836,
+    "ties": 4
+  },
+  "baseline": {
+    "games": 816,
+    "brier": 0.2279636554176288,
+    "log_loss": 0.6479236983997052,
+    "accuracy": 0.6208588957055214,
+    "ties": 1
+  },
+  "challenger_metrics": {
+    "games": 816,
+    "brier": 0.22193933952555794,
+    "log_loss": 0.6355993948738838,
+    "accuracy": 0.6441717791411042,
+    "ties": 1
+  },
+  "active_metrics": {
+    "games": 816,
+    "brier": 0.22193933952555794,
+    "log_loss": 0.6355993948738838,
+    "accuracy": 0.6441717791411042,
+    "ties": 1
+  },
+  "brier_improvement_pct": 2.642665069146366,
+  "by_season": [
+    {
+      "season": 2023,
+      "baseline": {
+        "games": 272,
+        "brier": 0.23474067689941194,
+        "log_loss": 0.6623745271964635,
+        "accuracy": 0.5992647058823529,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.23363330957449674,
+        "log_loss": 0.6611273053463997,
+        "accuracy": 0.6176470588235294,
+        "ties": 0
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.23363330957449674,
+        "log_loss": 0.6611273053463997,
+        "accuracy": 0.6176470588235294,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2024,
+      "baseline": {
+        "games": 272,
+        "brier": 0.2206875222542807,
+        "log_loss": 0.6313290297520948,
+        "accuracy": 0.6470588235294118,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.20952857615568551,
+        "log_loss": 0.6076636328084121,
+        "accuracy": 0.6801470588235294,
+        "ties": 0
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.20952857615568551,
+        "log_loss": 0.6076636328084121,
+        "accuracy": 0.6801470588235294,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2025,
+      "baseline": {
+        "games": 272,
+        "brier": 0.22846276709919375,
+        "log_loss": 0.6500675382505601,
+        "accuracy": 0.6162361623616236,
+        "ties": 1
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.2226561328464915,
+        "log_loss": 0.6380072464668424,
+        "accuracy": 0.6346863468634686,
+        "ties": 1
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.2226561328464915,
+        "log_loss": 0.6380072464668424,
+        "accuracy": 0.6346863468634686,
+        "ties": 1
+      }
+    }
+  ],
+  "by_team": {
+    "PIT": {
+      "baseline": {
+        "games": 51,
+        "brier": 0.2545645458964506,
+        "log_loss": 0.7036597501137988,
+        "accuracy": 0.5098039215686274,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 51,
+        "brier": 0.2666156723434511,
+        "log_loss": 0.7345230341322022,
+        "accuracy": 0.5294117647058824,
+        "ties": 0
+      },
+      "active": {
+        "games": 51,
+        "brier": 0.2666156723434511,
+        "log_loss": 0.7345230341322022,
+        "accuracy": 0.5294117647058824,
+        "ties": 0
+      }
+    },
+    "MIN": {
+      "baseline": {
+        "games": 51,
+        "brier": 0.23589014232961655,
+        "log_loss": 0.665123320760479,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 51,
+        "brier": 0.2261505533537502,
+        "log_loss": 0.6447653511388832,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      },
+      "active": {
+        "games": 51,
+        "brier": 0.2261505533537502,
+        "log_loss": 0.6447653511388832,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      }
+    }
+  },
+  "reliability": [
+    {
+      "low": 0.0,
+      "high": 0.2,
+      "games": 16,
+      "predicted": 0.15259483246611902,
+      "actual": 0.25
+    },
+    {
+      "low": 0.2,
+      "high": 0.4,
+      "games": 152,
+      "predicted": 0.31938012691412027,
+      "actual": 0.35855263157894735
+    },
+    {
+      "low": 0.4,
+      "high": 0.6,
+      "games": 336,
+      "predicted": 0.5005593293718251,
+      "actual": 0.4642857142857143
+    },
+    {
+      "low": 0.6,
+      "high": 0.8,
+      "games": 260,
+      "predicted": 0.6948437294327511,
+      "actual": 0.7076923076923077
+    },
+    {
+      "low": 0.8,
+      "high": 1.0,
+      "games": 52,
+      "predicted": 0.8460217851862148,
+      "actual": 0.8461538461538461
+    }
+  ],
+  "reason": "Margin-aware settings improved both Brier score and log loss on later seasons."
+}

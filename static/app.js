@@ -21,10 +21,11 @@ async function load(refresh = false) {
   $("phase").disabled = true;
   $("season").disabled = true;
   $("team").disabled = true;
+  $("model").disabled = true;
   $("loading").hidden = Boolean(dashboard);
   $("error").hidden = true;
   $("refresh").querySelector("span").textContent = "Updating…";
-  const query = new URLSearchParams({phase: $("phase").value, team: $("team").value});
+  const query = new URLSearchParams({phase: $("phase").value, team: $("team").value, model: $("model").value});
   if (dashboard) query.set("season", $("season").value);
   try {
     const response = await fetch(`${refresh ? "/api/refresh" : "/api/dashboard"}?${query}`, {method:refresh ? "POST" : "GET"});
@@ -38,6 +39,8 @@ async function load(refresh = false) {
     $("season").innerHTML = result.seasons.map(s => `<option value="${s}">${s}</option>`).join("");
     $("season").value = String(result.season);
     $("phase").value = result.include_playoffs ? "all" : "regular";
+    $("model").value = result.model.choice;
+    try { localStorage.setItem("nfl-dashboard-model", result.model.choice); } catch { /* Storage may be disabled. */ }
     render();
     $("dashboard").hidden = false;
   } catch (error) {
@@ -55,6 +58,7 @@ async function load(refresh = false) {
       $("phase").disabled = false;
       $("season").disabled = !dashboard;
       $("team").disabled = false;
+      $("model").disabled = false;
       $("refresh").querySelector("span").textContent = "Refresh data";
     }
   }
@@ -92,6 +96,7 @@ function render() {
   $("division-phase").textContent = d.include_playoffs ? "Regular + playoffs" : "Regular season";
   renderNext();
   renderProjection();
+  renderModelReport();
   renderTrend();
   renderDivision();
   renderSchedule();
@@ -115,7 +120,7 @@ function renderNext() {
     <div class="probability"><strong>${pct(g.win_probability)}</strong><span>${esc(dashboard.team.short_name)} win probability</span></div>
     <div class="prob-track"><div class="prob-fill" id="matchup-fill"></div></div>
     <div class="matchup-detail"><span>${esc(dashboard.team.code)} ${pct(g.win_probability)}</span><span>${esc(g.opponent)} ${pct(1 - g.win_probability)}</span></div>
-    <p class="caption">Elo estimate with ${g.venue === "Neutral" ? "no home-field adjustment" : "home-field advantage"}.${overdue ? " This date has passed; the provider has not supplied a final score." : ""}</p>`;
+    <p class="caption">${esc(dashboard.model.name)} · ${g.venue === "Neutral" ? "no home-field adjustment" : "home-field advantage"}.${overdue ? " This date has passed; the provider has not supplied a final score." : ""}</p>`;
   // SVGs and width attributes avoid inline styles under the app's CSP.
   const fill = $("matchup-fill");
   fill.replaceWith(svg(`<rect width="${(g.win_probability * 100).toFixed(2)}" height="7" fill="var(--accent)"/>`, "0 0 100 7", `${dashboard.team.short_name} estimated chance of winning`, "none"));
@@ -144,6 +149,30 @@ function renderProjection() {
   $("distribution").append(svg(`${bars}<text x="14" y="${baseline + 18}">W</text>`, `0 0 ${width} ${height}`, `Projected final wins distribution. Expected wins ${p.expected_wins}; middle 80 percent range ${p.low} to ${p.high}.`));
 }
 
+function renderModelReport() {
+  const model = dashboard.model, report = model.evaluation;
+  $("model-summary").textContent = `Active: ${model.name}. ${model.use_margin ? "Final score margins help measure team strength." : "Wins and losses determine rating changes."}`;
+  if (report.status !== "evaluated") {
+    $("model-report").innerHTML = `<p class="caption">${esc(report.reason)} Original Elo is active for this season.</p>`;
+    return;
+  }
+  const baseline = report.baseline, candidate = report.challenger_metrics;
+  const years = `${report.test_seasons[0]}–${report.test_seasons.at(-1)}`;
+  const improvement = report.brier_improvement_pct;
+  const scope = report.by_team[dashboard.team.code];
+  const teamDelta = scope?.challenger && scope?.baseline ? scope.challenger.brier - scope.baseline.brier : 0;
+  const teamComparison = Math.abs(teamDelta) < 1e-12 ? "the same" : teamDelta < 0 ? "better" : "worse";
+  const headline = Math.abs(improvement) < 1e-10 ? "No change in league-wide probability error" : `${Math.abs(improvement).toFixed(1)}% ${improvement >= 0 ? "lower" : "higher"} league-wide probability error`;
+  $("model-report").innerHTML = `<p class="model-evidence"><strong>${headline}</strong><span>${esc(years)} · ${baseline.games} regular-season games</span></p>
+    <div class="table-wrap"><table><caption class="sr-only">League-wide historical prediction comparison</caption><thead><tr><th>Historical evaluation</th><th>Original Elo</th><th>${esc(report.challenger.name)}</th></tr></thead><tbody>
+    <tr><td>Correct winner picks</td><td>${pct(baseline.accuracy)}</td><td>${pct(candidate.accuracy)}</td></tr>
+    <tr><td>Probability error (Brier) ↓</td><td>${baseline.brier.toFixed(4)}</td><td>${candidate.brier.toFixed(4)}</td></tr>
+    <tr><td>Log loss ↓</td><td>${baseline.log_loss.toFixed(4)}</td><td>${candidate.log_loss.toFixed(4)}</td></tr></tbody></table></div>
+    ${scope?.baseline && scope?.challenger ? `<p class="team-evidence ${color(-teamDelta)}">${esc(dashboard.team.short_name)} subset: probability error ${scope.baseline.brier.toFixed(4)} → ${scope.challenger.brier.toFixed(4)} across ${scope.baseline.games} games. The candidate performed ${teamComparison} on this team’s sample.</p>` : ""}
+    <p class="caption">Settings selected on ${report.tuning_seasons[0]}–${report.tuning_seasons.at(-1)}; later seasons used for evaluation and the default-model decision. Lower error values are better. Same settings for all teams. Ties are excluded from pick accuracy.</p>
+    <p class="caption">${esc(report.reason)} These are historical results, not a guarantee of future accuracy.</p>`;
+}
+
 function renderTrend() {
   const results = dashboard.schedule.filter(g => g.result);
   if (!results.length) {
@@ -170,7 +199,7 @@ function renderSchedule() {
     $("schedule").innerHTML = '<p class="empty">No games match this filter.</p>';
     return;
   }
-  $("schedule").innerHTML = `<table><caption class="sr-only">${esc(dashboard.team.short_name)} schedule and results</caption><thead><tr><th>Game</th><th>Date</th><th>Opponent</th><th>Venue</th><th>Result / ${esc(dashboard.team.code)} score</th><th>+ / −</th><th>${esc(dashboard.team.code)} win chance</th></tr></thead><tbody>${games.map(g => `<tr><td>${esc(gameLabel(g))}</td><td>${esc(dateLabel(g.date))}</td><td class="team opponent-cell">${esc(g.opponent_name)}<span>${g.kickoff ? `${esc(g.kickoff)} ET` : "Time TBD"}</span></td><td>${esc(g.venue)}</td><td>${g.result ? `<span class="result-badge ${g.result}">${g.result}</span>${g.scored}–${g.allowed}` : "Upcoming"}</td><td class="${color(g.differential)}">${g.differential == null ? "—" : signed(g.differential)}</td><td>${pct(g.win_probability)}</td></tr>`).join("")}</tbody></table>`;
+  $("schedule").innerHTML = `<table><caption class="sr-only">${esc(dashboard.team.short_name)} schedule and results</caption><thead><tr><th>Game</th><th>Date</th><th>Opponent</th><th>Venue</th><th>Result / ${esc(dashboard.team.code)} score</th><th>+ / −</th><th>${esc(dashboard.team.code)} win chance</th></tr></thead><tbody>${games.map(g => `<tr><td>${esc(gameLabel(g))}</td><td>${esc(dateLabel(g.date))}</td><td class="team opponent-cell">${esc(g.opponent_name)}<span>${g.kickoff ? `${esc(g.kickoff)} ET` : "Time TBD"}</span></td><td>${esc(g.venue)}</td><td>${g.result ? `<span class="result-badge ${g.result}">${g.result}</span>${g.scored}–${g.allowed}` : "Upcoming"}</td><td class="${color(g.differential)}">${g.differential == null ? "—" : signed(g.differential)}</td><td>${pct(g.result ? g.pregame_probability : g.win_probability)}${g.result ? ' <span class="muted">PRE</span>' : ""}</td></tr>`).join("")}</tbody></table>`;
 }
 
 function renderRankings() {
@@ -192,6 +221,7 @@ $("retry").addEventListener("click", () => load(true));
 $("season").addEventListener("change", () => load());
 $("phase").addEventListener("change", () => load());
 $("team").addEventListener("change", () => load());
+$("model").addEventListener("change", () => load());
 $("team-search").addEventListener("input", () => dashboard && renderRankings());
 document.querySelector(".segmented").addEventListener("click", event => {
   const button = event.target.closest("button[data-filter]");
@@ -210,5 +240,7 @@ $("rankings").addEventListener("click", event => {
 try {
   const savedTeam = localStorage.getItem("nfl-dashboard-team");
   if (["PIT", "MIN"].includes(savedTeam)) $("team").value = savedTeam;
+  const savedModel = localStorage.getItem("nfl-dashboard-model");
+  if (["auto", "baseline"].includes(savedModel)) $("model").value = savedModel;
 } catch { /* The dashboard also works without browser storage. */ }
 load();

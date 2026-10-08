@@ -202,7 +202,7 @@ class ServerTests(unittest.TestCase):
             body = json.load(response)
             self.assertEqual(body["team_stats"]["ties"], 1)
             self.assertIn("downloaded_at", body["data"])
-        for query in ("season=banana", "season=1900", "phase=unknown", "team=DAL"):
+        for query in ("season=banana", "season=1900", "phase=unknown", "team=DAL", "model=unknown"):
             with self.assertRaises(HTTPError) as error:
                 urlopen(self.base + "/api/dashboard?" + query)
             self.assertEqual(error.exception.code, 400)
@@ -220,6 +220,12 @@ class ServerTests(unittest.TestCase):
         self.assertEqual(dashboard("PIT"), steelers)
         with urlopen(Request(self.base + "/api/refresh?season=2026&team=MIN", method="POST")) as response:
             self.assertEqual(json.load(response)["team_stats"]["team"], "MIN")
+
+    def test_model_choice_has_its_own_dashboard_cache_entry(self):
+        for model in ("baseline", "auto", "baseline"):
+            with urlopen(self.base + f"/api/dashboard?season=2026&model={model}") as response:
+                body = json.load(response)
+                self.assertEqual(body["model"]["choice"], model)
 
     def test_assets_are_restricted_to_public_files(self):
         with urlopen(self.base) as response:
