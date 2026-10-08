@@ -13,8 +13,10 @@ let scheduleFilter = "all";
 let sortKey = "rating";
 let sortDirection = -1;
 let requestNumber = 0;
+let scenarioQB = "", scenarioOpponentQB = "";
 
 async function load(refresh = false) {
+  if (refresh) { scenarioQB = ""; scenarioOpponentQB = ""; }
   const current = ++requestNumber;
   $("refresh").disabled = true;
   $("retry").disabled = true;
@@ -26,6 +28,8 @@ async function load(refresh = false) {
   $("error").hidden = true;
   $("refresh").querySelector("span").textContent = "Updating…";
   const query = new URLSearchParams({phase: $("phase").value, team: $("team").value, model: $("model").value});
+  if (scenarioQB) query.set("qb", scenarioQB);
+  if (scenarioOpponentQB) query.set("opponent_qb", scenarioOpponentQB);
   if (dashboard) query.set("season", $("season").value);
   try {
     const response = await fetch(`${refresh ? "/api/refresh" : "/api/dashboard"}?${query}`, {method:refresh ? "POST" : "GET"});
@@ -95,8 +99,10 @@ function render() {
   $("notice").hidden = !$("notice").textContent;
   $("division-phase").textContent = d.include_playoffs ? "Regular + playoffs" : "Regular season";
   renderNext();
+  renderMatchup();
   renderProjection();
   renderModelReport();
+  renderMatchupReport();
   renderTrend();
   renderDivision();
   renderSchedule();
@@ -124,6 +130,37 @@ function renderNext() {
   // SVGs and width attributes avoid inline styles under the app's CSP.
   const fill = $("matchup-fill");
   fill.replaceWith(svg(`<rect width="${(g.win_probability * 100).toFixed(2)}" height="7" fill="var(--accent)"/>`, "0 0 100 7", `${dashboard.team.short_name} estimated chance of winning`, "none"));
+}
+
+function renderMatchup() {
+  const m = dashboard.matchup, weather = dashboard.weather;
+  if (!m) {
+    $("matchup-lab").innerHTML = `<p class="caption">${dashboard.next_game ? "QB scenarios need enough historical player and team statistics. Refresh data when online to load them." : "Choose a season with an upcoming matchup to explore quarterback scenarios."}</p>`;
+  } else {
+    const options = (rows, recent, selected) => `<option value="">Recent passer: ${esc(recent?.name || "Unknown")}</option>${rows.map(q => `<option value="${esc(q.id)}"${q.id === selected ? " selected" : ""}>${esc(q.name)}${q.prior_dropbacks < 100 ? " · limited history" : ""}</option>`).join("")}`;
+    const delta = 100 * (m.probability - m.default_probability);
+    const scenario = Boolean(m.selected_qb || m.opponent_qb);
+    const contributions = [...m.contributions].sort((a,b) => Math.abs(b.change) - Math.abs(a.change));
+    $("matchup-lab").innerHTML = `<div class="scenario-grid"><div><h3>Who plays quarterback?</h3><div class="scenario-controls"><label>${esc(dashboard.team.short_name)} QB<select id="scenario-qb">${options(m.team_qbs, m.assumed_qbs[dashboard.team.code], m.selected_qb)}</select></label><label>${esc(dashboard.next_game.opponent_name)} QB<select id="scenario-opponent-qb">${options(m.opponent_qbs, m.assumed_qbs[dashboard.next_game.opponent], m.opponent_qb)}</select></label></div>
+      <div class="scenario-result"><strong id="scenario-probability">${pct(m.probability)}</strong><span>${esc(dashboard.team.short_name)} chance · experimental matchup model</span></div><p class="caption">${scenario ? `${signed(Number(delta.toFixed(1)))} percentage points versus recent-passer assumptions. This scenario does not alter the schedule, season outlook, or saved forecasts.` : `Compare quarterbacks to explore a possible lineup change. Elo alone: ${pct(m.elo_probability)}.`}</p><p class="caption">${esc(m.note)}</p></div>
+      <div><h3>What changes the estimate?</h3><div class="table-wrap"><table><caption class="sr-only">Sequential contributions to the experimental matchup forecast</caption><thead><tr><th>Signal</th><th>Probability change</th></tr></thead><tbody>${contributions.map(c => `<tr><td>${esc(c.label)}</td><td class="${color(c.change)}">${signed(Number((100*c.change).toFixed(1)))} pp</td></tr>`).join("")}</tbody></table></div><p class="caption">Contributions add from Elo to the recent-passer forecast in a fixed order. They describe the model, not proven causes. QB selections above are shown separately.</p></div></div>
+      <details class="injury-details"><summary>Reported availability · ${m.injuries.length} entries for this matchup</summary>${m.injuries.length ? `<div class="table-wrap"><table><thead><tr><th>Team</th><th>Player</th><th>Status</th><th>Injury</th></tr></thead><tbody>${m.injuries.map(r => `<tr><td>${esc(r.team)}</td><td>${esc(r.name)} · ${esc(r.position)}</td><td>${esc(r.status)}</td><td>${esc(r.injury)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="caption">No reports for this game week are available in the saved feed. That does not establish that every player is healthy.</p>'}</details>`;
+  }
+  $("game-weather").innerHTML = weather ? `<div class="weather-panel"><h3>Kickoff conditions</h3>${weather.status === "forecast" ? `<p>${weather.temperature_f}°F · wind up to ${weather.wind_mph} mph · gusts ${weather.gust_mph} mph · ${weather.precipitation_inches}″ precipitation</p><p class="caption">Three-hour game window. Forecast saved ${esc(new Date(weather.retrieved_at).toLocaleString())}. ${esc(weather.warning || "")}</p>` : `<p class="caption">${esc(weather.reason)}</p>`}<p class="caption">${esc(weather.note)} Weather by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p></div>` : "";
+}
+
+function renderMatchupReport() {
+  const r = dashboard.model.matchup_evaluation;
+  const warnings = dashboard.features?.sources.filter(s => s.warning) || [];
+  if (!r || r.status !== "evaluated") {
+    $("matchup-report").innerHTML = `<p class="caption">${esc(r?.reason || "Extra player and team data are unavailable in this data-file mode.")}</p>`;
+  } else {
+    const b = r.baseline, c = r.challenger_metrics, scope = r.by_team[dashboard.team.code];
+    $("matchup-report").innerHTML = `<h3>Does the matchup model help?</h3><p class="caption">Frozen corrections trained on ${r.tuning_seasons[0]}–${r.tuning_seasons.at(-1)}, compared on ${r.test_seasons[0]}–${r.test_seasons.at(-1)}. The full model uses passing/rushing offense and defense, rest, and a QB-change estimate.</p><div class="table-wrap"><table><thead><tr><th>${b.games} games</th><th>Selected Elo</th><th>QB-aware matchup</th></tr></thead><tbody><tr><td>Correct winner picks</td><td>${pct(b.accuracy)}</td><td>${pct(c.accuracy)}</td></tr><tr><td>Brier error ↓</td><td>${b.brier.toFixed(4)}</td><td>${c.brier.toFixed(4)}</td></tr><tr><td>Log loss ↓</td><td>${b.log_loss.toFixed(4)}</td><td>${c.log_loss.toFixed(4)}</td></tr></tbody></table></div><p class="caption">${esc(r.reason)}</p>${scope?.baseline && scope?.challenger ? `<p class="caption">${esc(dashboard.team.short_name)} Brier error: ${scope.baseline.brier.toFixed(4)} → ${scope.challenger.brier.toFixed(4)} across ${scope.baseline.games} games.</p>` : ""}<details><summary>Feature checks on the older validation season</summary><div class="table-wrap"><table><thead><tr><th>Included signals</th><th>Brier error ↓</th><th>Log loss ↓</th></tr></thead><tbody>${r.ablations.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.validation.brier.toFixed(4)}</td><td>${a.validation.log_loss.toFixed(4)}</td></tr>`).join("")}</tbody></table></div><p class="caption">Each smaller model trains on the first two tuning seasons and validates on the third. These checks do not choose the final challenger.</p></details>`;
+  }
+  if (warnings.length) $("matchup-report").innerHTML += `<p class="caption">Player/team feeds: ${warnings.length} saved or unavailable files. Forecasts may use older player information. Refresh while online to update.</p>`;
+  const forward = dashboard.forward_evaluation;
+  $("forward-report").innerHTML = forward ? `<h3>Saved before kickoff</h3><p class="caption">${forward.snapshots} snapshots covering ${forward.games} games for this team and model choice. ${forward.evaluated ? `${forward.evaluated.games} completed games · Brier ${forward.evaluated.brier.toFixed(4)} · log loss ${forward.evaluated.log_loss.toFixed(4)}.` : "No completed games to evaluate yet."}</p><p class="caption">${esc(forward.policy)}</p>` : "";
 }
 
 function svg(content, viewBox, label, aspect = "xMidYMid meet") {
@@ -218,10 +255,16 @@ function renderRankings() {
 
 $("refresh").addEventListener("click", () => load(true));
 $("retry").addEventListener("click", () => load(true));
-$("season").addEventListener("change", () => load());
+$("season").addEventListener("change", () => { scenarioQB = ""; scenarioOpponentQB = ""; load(); });
 $("phase").addEventListener("change", () => load());
-$("team").addEventListener("change", () => load());
+$("team").addEventListener("change", () => { scenarioQB = ""; scenarioOpponentQB = ""; load(); });
 $("model").addEventListener("change", () => load());
+$("matchup-lab").addEventListener("change", event => {
+  if (event.target.id === "scenario-qb") scenarioQB = event.target.value;
+  else if (event.target.id === "scenario-opponent-qb") scenarioOpponentQB = event.target.value;
+  else return;
+  load();
+});
 $("team-search").addEventListener("input", () => dashboard && renderRankings());
 document.querySelector(".segmented").addEventListener("click", event => {
   const button = event.target.closest("button[data-filter]");
@@ -241,6 +284,6 @@ try {
   const savedTeam = localStorage.getItem("nfl-dashboard-team");
   if (["PIT", "MIN"].includes(savedTeam)) $("team").value = savedTeam;
   const savedModel = localStorage.getItem("nfl-dashboard-model");
-  if (["auto", "baseline"].includes(savedModel)) $("model").value = savedModel;
+  if (["auto", "baseline", "elo", "matchup"].includes(savedModel)) $("model").value = savedModel;
 } catch { /* The dashboard also works without browser storage. */ }
 load();

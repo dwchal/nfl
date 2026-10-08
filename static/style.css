@@ -694,6 +694,49 @@ footer {
   width:100%;
   height:7px;
 }
+.scenario-grid {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:28px;
+}
+.scenario-controls {
+  display:flex;
+  flex-wrap:wrap;
+  gap:14px;
+}
+.scenario-controls label {
+  display:grid;
+  gap:8px;
+  min-width:0;
+  flex:1 1 180px;
+}
+.scenario-controls select {
+  width:100%;
+}
+.scenario-result {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:baseline;
+  gap:14px;
+  margin-top:20px;
+}
+.scenario-result strong {
+  font-size:2.4rem;
+  color:var(--accent);
+}
+.scenario-result span {
+  font-size:.85rem;
+}
+.injury-details, .weather-panel, #matchup-report, #forward-report {
+  margin-top:24px;
+}
+.injury-details summary, #matchup-report summary {
+  cursor:pointer;
+  padding:10px 0;
+}
+@media(max-width:760px) {
+  .scenario-grid { grid-template-columns:1fr; }
+}
 @media(prefers-reduced-motion:no-preference) {
   button {
     transition:background .15s;

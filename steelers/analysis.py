@@ -1,6 +1,7 @@
 """Records, chronological Elo ratings, and transparent season projections."""
 
 import random
+import math
 from collections import Counter
 from dataclasses import asdict
 from datetime import date
@@ -62,10 +63,11 @@ def record_table(games, ratings):
     return ranked
 
 
-def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIONS, team="PIT", config=BASELINE):
+def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIONS, team="PIT", config=BASELINE, corrections=None):
     """Simulate all remaining REG games, updating ratings along each sample path."""
     rng = random.Random(42)
     counts = Counter()
+    odds_multipliers = {identifier: math.exp(shift) for identifier, shift in (corrections or {}).items()}
     for _ in range(simulations):
         sample_ratings = ratings.copy()
         sample_wins = wins
@@ -73,7 +75,11 @@ def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIO
             home, away = team_key(game.home), team_key(game.away)
             sample_ratings.setdefault(home, BASE_RATING)
             sample_ratings.setdefault(away, BASE_RATING)
-            home_win = rng.random() < home_probability(sample_ratings[home], sample_ratings[away], game.neutral, config)
+            probability = home_probability(sample_ratings[home], sample_ratings[away], game.neutral, config)
+            if odds_multipliers:
+                multiplier = odds_multipliers.get(game.id, 1)
+                probability = probability * multiplier / (1 - probability + probability * multiplier)
+            home_win = rng.random() < probability
             if (home == team and home_win) or (away == team and not home_win):
                 sample_wins += 1
             # Future margins are unknown: simulated updates use win/loss alone.
@@ -107,7 +113,7 @@ def default_season(games, today=None):
     return max(available) if available else min(seasons)
 
 
-def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMULATIONS, team="PIT", model="auto"):
+def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMULATIONS, team="PIT", model="auto", matchup=None, matchup_pregame=None):
     if team not in SUPPORTED_TEAMS:
         raise ValueError("Choose the Pittsburgh Steelers (PIT) or Minnesota Vikings (MIN).")
     profile = SUPPORTED_TEAMS[team]
@@ -118,10 +124,11 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
     season = default_season(team_games) if season is None else season
     if season not in seasons:
         raise ValueError("That season is not available in the schedule.")
-    if model not in {"auto", "baseline"}:
+    if model not in {"auto", "baseline", "elo", "matchup"}:
         raise ValueError("Choose the backtested default or original Elo model.")
     automatic_config, evaluation = select_model(games, season)
-    config = automatic_config if model == "auto" else BASELINE
+    config = BASELINE if model == "baseline" else automatic_config
+    use_matchup = matchup is not None and matchup.report["status"] == "evaluated" and (model == "matchup" or (model == "auto" and matchup.report["promoted"]))
     all_season = [g for g in games if g.season == season]
     selected = [g for g in all_season if include_playoffs or g.kind == "REG"]
     # Regular-season views exclude postseason results from ratings and next game.
@@ -147,6 +154,11 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
         p_home = home_probability(ratings.get(team_key(game.home), BASE_RATING),
                                   ratings.get(team_key(game.away), BASE_RATING), game.neutral, config)
         prior_probability = pregame[game.id]["probability"] if game.completed else None
+        if use_matchup:
+            if game.completed:
+                prior_probability = matchup_pregame.get(game.id, prior_probability)
+            else:
+                p_home = matchup.probability(game, p_home)
         schedule.append({"id": game.id, "week": game.week, "kind": game.kind,
                          "date": game.day.isoformat(), "kickoff": game.kickoff,
                          "opponent": opponent, "opponent_name": TEAM_NAMES.get(opponent, opponent),
@@ -163,8 +175,12 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
     regular = next(r for r in record_table(reg_games, ratings) if r["team"] == team)
     # Projection always uses ratings as of the regular season, even in playoff view.
     reg_ratings, _ = elo_ratings([g for g in games if g.season != season or g.kind == "REG"], season, team, config)
+    corrections = None
+    if use_matchup:
+        from .matchup import logit
+        corrections = {g.id: logit(matchup.probability(g, .5)) for g in reg_games if not g.completed}
     projection = project_season([g for g in reg_games if not g.completed], reg_ratings,
-                                regular["wins"], regular["losses"], regular["ties"], simulations, team, config)
+                                regular["wins"], regular["losses"], regular["ties"], simulations, team, config, corrections)
     division = sorted([r for r in rankings if r["team"] in profile["members"]],
                       key=lambda r: (-(r["win_pct"] or 0), -r["differential"], r["team"]))
     completed = [g for g in schedule if g["result"]]
@@ -175,4 +191,7 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
             "elo_history": history, "form": [g["result"] for g in completed[-5:]],
             "latest_result_date": max((g.day.isoformat() for g in selected if g.completed), default=None),
             "model": {**asdict(config), "choice": model, "evaluation": evaluation,
+                      "name": "QB-aware matchup" if use_matchup else config.name,
+                      "matchup_evaluation": matchup.report if matchup else None,
+                      "matchup_active": use_matchup,
                       "initial_rating": BASE_RATING, "warmup_seasons": 3}}

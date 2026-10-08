@@ -2,6 +2,7 @@
 
 import csv
 import io
+import hashlib
 import os
 import threading
 import time
@@ -30,6 +31,10 @@ class Game:
     away_score: int | None
     neutral: bool
     stadium: str
+    home_rest: int | None = None
+    away_rest: int | None = None
+    roof: str = ""
+    stadium_id: str = ""
 
     @property
     def completed(self):
@@ -56,6 +61,9 @@ def parse_games(content):
                 row.get("gametime", ""), row["home_team"], row["away_team"],
                 score(row["home_score"]), score(row["away_score"]),
                 row.get("location", "").lower() == "neutral", row.get("stadium", ""),
+                score(row.get("home_rest", "")), score(row.get("away_rest", "")),
+                row.get("roof", ""),
+                row.get("stadium_id", ""),
             )
         except (ValueError, TypeError) as error:
             raise ValueError(f"Invalid schedule row: {row['game_id']}") from error
@@ -140,4 +148,5 @@ class ScheduleStore:
     @staticmethod
     def _metadata(path, source, warning=""):
         return {"source": source, "source_url": SOURCE, "warning": warning,
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "downloaded_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()}

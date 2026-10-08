@@ -5,6 +5,7 @@ import argparse
 import json
 import mimetypes
 import threading
+import time
 import webbrowser
 from collections import OrderedDict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,13 +14,19 @@ from urllib.parse import parse_qs, urlparse
 
 from steelers.analysis import SUPPORTED_TEAMS, build_dashboard, default_season
 from steelers.data import DataUnavailable, ScheduleStore
-from steelers.model import select_model
+from steelers.model import BASE_RATING, home_probability, replay_season, select_model, team_key
+from steelers.features import FeatureStore
+from steelers.forecast import ForecastArchive
+from steelers.matchup import VERSION, evaluate, next_context
+from steelers.weather import WeatherStore
 
 ROOT = Path(__file__).resolve().parent
 
 
-def make_handler(store):
+def make_handler(store, feature_store=None, archive=None, weather_store=None):
     dashboards = OrderedDict()
+    feature_cache, matchup_cache = {}, {}
+    feature_checked = {}
     analysis_lock = threading.Lock()
 
     class Handler(BaseHTTPRequestHandler):
@@ -70,16 +77,56 @@ def make_handler(store):
                     raise ValueError("Choose the Pittsburgh Steelers (PIT) or Minnesota Vikings (MIN).")
                 if phase not in {"regular", "all"}:
                     raise ValueError("Choose regular season or regular season + playoffs.")
-                if model not in {"auto", "baseline"}:
+                if model not in {"auto", "baseline", "elo", "matchup"}:
                     raise ValueError("Choose the backtested default or original Elo model.")
                 games, metadata = store.load(refresh)
-                key = (metadata["downloaded_at"], season, phase, team, model)
                 with analysis_lock:
+                    target = season if season is not None else default_season(games)
+                    if target not in {g.season for g in games}:
+                        raise ValueError("That season is not available in the schedule.")
+                    matchup, pregame, bundle = None, None, None
+                    if feature_store:
+                        if target not in feature_cache or refresh or time.time() - feature_checked.get(target, 0) > 3600:
+                            feature_cache[target] = feature_store.load(target, refresh)
+                            feature_checked[target] = time.time()
+                            if len(feature_cache) > 4:
+                                feature_cache.pop(next(iter(feature_cache)))
+                        bundle = feature_cache[target]
+                        matchup_key = (metadata["downloaded_at"], target, phase, bundle["digest"])
+                        if matchup_key not in matchup_cache:
+                            config, _ = select_model(games, target)
+                            rating_games = [g for g in games if g.season != target or phase == "all" or g.kind == "REG"]
+                            matchup_cache[matchup_key] = evaluate(rating_games, target, config, bundle)
+                            if len(matchup_cache) > 8:
+                                matchup_cache.pop(next(iter(matchup_cache)))
+                        matchup, pregame = matchup_cache[matchup_key]
+                    key = (metadata["downloaded_at"], target, phase, team, model, bundle["digest"] if bundle else "")
                     if key not in dashboards:
-                        dashboards[key] = build_dashboard(games, season, phase == "all", team=team, model=model)
+                        dashboards[key] = build_dashboard(games, target, phase == "all", team=team, model=model,
+                                                          matchup=matchup, matchup_pregame=pregame)
                         if len(dashboards) > 8:
                             dashboards.popitem(last=False)
                     result = dict(dashboards[key])
+                    if bundle:
+                        result["features"] = {"sources": bundle["sources"], "digest": bundle["digest"]}
+                    next_game = next((g for g in games if result["next_game"] and g.id == result["next_game"]["id"]), None)
+                    if next_game and weather_store:
+                        result["weather"] = weather_store.load(next_game, refresh)
+                    if next_game and matchup and matchup.report["status"] == "evaluated":
+                        config, _ = select_model(games, target)
+                        rating_games = [g for g in games if g.season != target or phase == "all" or g.kind == "REG"]
+                        ratings = replay_season(rating_games, target, config)[0]
+                        p_home = home_probability(ratings.get(team_key(next_game.home), BASE_RATING), ratings.get(team_key(next_game.away), BASE_RATING), next_game.neutral, config)
+                        result["matchup"] = next_context(matchup, next_game, p_home, team, bundle,
+                                                         query.get("qb", [""])[0], query.get("opponent_qb", [""])[0])
+                    if archive:
+                        if next_game and not query.get("qb") and not query.get("opponent_qb"):
+                            archive.save(next_game, team, model, result["next_game"]["win_probability"],
+                                         {"version": VERSION, "model": result["model"], "schedule": metadata,
+                                          "feature_sources": bundle["sources"] if bundle else [],
+                                          "weather": result.get("weather"),
+                                          "matchup": result.get("matchup"), "game": result["next_game"]})
+                        result["forward_evaluation"] = archive.report(games, team, target, model)
                 result["data"] = metadata
                 return self.send(200, result)
             except DataUnavailable as error:
@@ -103,20 +150,29 @@ def main():
     parser.add_argument("--team", choices=SUPPORTED_TEAMS, default="PIT", help="Team for --check (default: PIT)")
     parser.add_argument("--backtest", action="store_true", help="Print historical model evaluation as JSON and exit")
     parser.add_argument("--season", type=int, help="Season for --check or --backtest; settings use only prior seasons")
-    parser.add_argument("--model", choices=("auto", "baseline"), default="auto", help="Model for --check")
+    parser.add_argument("--model", choices=("auto", "baseline", "elo", "matchup"), default="auto", help="Model for --check")
     args = parser.parse_args()
     store = ScheduleStore(ROOT / ".cache" / "games.csv", args.offline, args.data)
+    feature_store = FeatureStore(ROOT / ".cache" / "features", args.offline) if not args.data else None
+    archive = ForecastArchive(ROOT / ".cache" / "forecasts.sqlite3") if not args.data else None
+    weather_store = WeatherStore(ROOT / ".cache" / "weather", args.offline) if not args.data else None
     if args.check or args.backtest:
         try:
             games, metadata = store.load()
+            season = args.season if args.season is not None else default_season(games)
+            if season not in {g.season for g in games}:
+                raise ValueError("That season is not available in the schedule.")
+            config, report = select_model(games, season)
+            matchup, pregame = None, None
+            if feature_store:
+                bundle = feature_store.load(season)
+                matchup, pregame = evaluate(games, season, config, bundle)
             if args.backtest:
-                season = args.season if args.season is not None else default_season(games)
-                if season not in {g.season for g in games}:
-                    raise ValueError("That season is not available in the schedule.")
-                _, report = select_model(games, season)
-                print(json.dumps({"season": season, "data": metadata, **report}, indent=2, allow_nan=False))
+                print(json.dumps({"season": season, "data": metadata, **report,
+                                  "matchup": matchup.report if matchup else None,
+                                  "feature_sources": bundle["sources"] if feature_store else []}, indent=2, allow_nan=False))
                 return
-            dashboard = build_dashboard(games, args.season, team=args.team, model=args.model)
+            dashboard = build_dashboard(games, args.season, team=args.team, model=args.model, matchup=matchup, matchup_pregame=pregame)
         except (DataUnavailable, ValueError) as error:
             parser.exit(1, f"{error}\n")
         s = dashboard["team_stats"]
@@ -127,12 +183,12 @@ def main():
             print(metadata["warning"])
         return
     try:
-        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(store))
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(store, feature_store, archive, weather_store))
     except OSError:
         # Avoid interfering with another app already using the default port.
         if args.port != 8765:
             raise
-        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(store))
+        server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(store, feature_store, archive, weather_store))
     url = f"http://127.0.0.1:{server.server_port}"
     print(f"\nSteelers & Vikings Dashboard is running at {url}\nKeep this window open. Press Control-C to stop.\n", flush=True)
     if not args.no_browser:
