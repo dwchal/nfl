@@ -137,7 +137,7 @@ function renderMatchup() {
   if (!m) {
     $("matchup-lab").innerHTML = `<p class="caption">${dashboard.next_game ? "QB scenarios need enough historical player and team statistics. Refresh data when online to load them." : "Choose a season with an upcoming matchup to explore quarterback scenarios."}</p>`;
   } else {
-    const options = (rows, recent, selected) => `<option value="">Recent passer: ${esc(recent?.name || "Unknown")}</option>${rows.map(q => `<option value="${esc(q.id)}"${q.id === selected ? " selected" : ""}>${esc(q.name)}${q.prior_dropbacks < 100 ? " · limited history" : ""}</option>`).join("")}`;
+    const options = (rows, recent, selected) => `<option value="">${esc(recent?.status || "Recent passer")}: ${esc(recent?.name || "Unknown")}</option>${rows.map(q => `<option value="${esc(q.id)}"${q.id === selected ? " selected" : ""}>${esc(q.name)}${q.prior_dropbacks < 100 ? " · limited history" : ""}</option>`).join("")}`;
     const delta = 100 * (m.probability - m.default_probability);
     const scenario = Boolean(m.selected_qb || m.opponent_qb);
     const contributions = [...m.contributions].sort((a,b) => Math.abs(b.change) - Math.abs(a.change));
@@ -146,7 +146,20 @@ function renderMatchup() {
       <div><h3>What changes the estimate?</h3><div class="table-wrap"><table><caption class="sr-only">Sequential contributions to the experimental matchup forecast</caption><thead><tr><th>Signal</th><th>Probability change</th></tr></thead><tbody>${contributions.map(c => `<tr><td>${esc(c.label)}</td><td class="${color(c.change)}">${signed(Number((100*c.change).toFixed(1)))} pp</td></tr>`).join("")}</tbody></table></div><p class="caption">Contributions add from Elo to the recent-passer forecast in a fixed order. They describe the model, not proven causes. QB selections above are shown separately.</p></div></div>
       <details class="injury-details"><summary>Reported availability · ${m.injuries.length} entries for this matchup</summary>${m.injuries.length ? `<div class="table-wrap"><table><thead><tr><th>Team</th><th>Player</th><th>Status</th><th>Injury</th></tr></thead><tbody>${m.injuries.map(r => `<tr><td>${esc(r.team)}</td><td>${esc(r.name)} · ${esc(r.position)}</td><td>${esc(r.status)}</td><td>${esc(r.injury)}</td></tr>`).join("")}</tbody></table></div>` : '<p class="caption">No reports for this game week are available in the saved feed. That does not establish that every player is healthy.</p>'}</details>`;
   }
+  renderAdvancedContext(m);
   $("game-weather").innerHTML = weather ? `<div class="weather-panel"><h3>Kickoff conditions</h3>${weather.status === "forecast" ? `<p>${weather.temperature_f}°F · wind up to ${weather.wind_mph} mph · gusts ${weather.gust_mph} mph · ${weather.precipitation_inches}″ precipitation</p><p class="caption">Three-hour game window. Forecast saved ${esc(new Date(weather.retrieved_at).toLocaleString())}. ${esc(weather.warning || "")}</p>` : `<p class="caption">${esc(weather.reason)}</p>`}<p class="caption">${esc(weather.note)} Weather by <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p></div>` : "";
+}
+
+function renderAdvancedContext(m) {
+  const root = $("advanced-context");
+  if (!m?.advanced) { root.innerHTML = ""; return; }
+  const c = m.advanced_context, support = dashboard.model.matchup_evaluation.support;
+  const teams = [dashboard.team.code, dashboard.next_game.opponent];
+  root.innerHTML = `<h3>Pregame evidence</h3><div class="table-wrap"><table><thead><tr><th>Team</th><th>Quarterback</th><th>Evidence</th><th>Team-local kickoff</th><th>Travel</th></tr></thead><tbody>${teams.map(t => {
+    const q = c.quarterbacks[t], travel = c.travel.teams[t];
+    return `<tr><td>${esc(t)}</td><td>${esc(q.name)}</td><td>${esc(q.status)} · ${esc(q.source)}${q.available_at ? `<br>${esc(new Date(q.available_at).toLocaleString())}` : ""}</td><td>${esc(travel.body_clock || "Unknown")}<br>${esc(travel.time_zone || "")}</td><td>${travel.miles == null ? "Unknown" : `${travel.miles} mi`} · ${travel.away_streak} consecutive away</td></tr>`;
+  }).join("")}</tbody></table></div><p class="caption">${esc(c.travel.note)}</p><p class="caption">Weather interactions: ${support.weather_enabled ? "trained" : "collecting history"} (${support.weather_games} earlier forecasts). Availability adjustments: ${support.availability_enabled ? "trained" : "collecting history"} (${support.availability_games} earlier snapshots). ${c.weather ? "A pre-kickoff weather forecast is available for this estimate." : "No eligible outdoor weather snapshot is available for this estimate."}</p>
+  <details><summary>Record a confirmed starting quarterback</summary><p class="caption">Choose a quarterback in the scenario controls, then record the announcement source below. Saving applies to the advanced forecast and its archive; a scenario selection alone does not.</p><label>Confirmation source<input id="lineup-source" type="text" maxlength="500" placeholder="Team announcement or source URL"></label><div class="scenario-controls"><button data-confirm-lineup="${esc(teams[0])}" ${m.selected_qb ? "" : "disabled"}>Confirm ${esc(teams[0])} selection</button><button data-confirm-lineup="${esc(teams[1])}" ${m.opponent_qb ? "" : "disabled"}>Confirm ${esc(teams[1])} selection</button></div><p id="lineup-message" class="caption" aria-live="polite"></p></details>`;
 }
 
 function renderMatchupReport() {
@@ -156,7 +169,8 @@ function renderMatchupReport() {
     $("matchup-report").innerHTML = `<p class="caption">${esc(r?.reason || "Extra player and team data are unavailable in this data-file mode.")}</p>`;
   } else {
     const b = r.baseline, c = r.challenger_metrics, scope = r.by_team[dashboard.team.code];
-    $("matchup-report").innerHTML = `<h3>Does the matchup model help?</h3><p class="caption">Frozen corrections trained on ${r.tuning_seasons[0]}–${r.tuning_seasons.at(-1)}, compared on ${r.test_seasons[0]}–${r.test_seasons.at(-1)}. The full model uses passing/rushing offense and defense, rest, and a QB-change estimate.</p><div class="table-wrap"><table><thead><tr><th>${b.games} games</th><th>Selected Elo</th><th>QB-aware matchup</th></tr></thead><tbody><tr><td>Correct winner picks</td><td>${pct(b.accuracy)}</td><td>${pct(c.accuracy)}</td></tr><tr><td>Brier error ↓</td><td>${b.brier.toFixed(4)}</td><td>${c.brier.toFixed(4)}</td></tr><tr><td>Log loss ↓</td><td>${b.log_loss.toFixed(4)}</td><td>${c.log_loss.toFixed(4)}</td></tr></tbody></table></div><p class="caption">${esc(r.reason)}</p>${scope?.baseline && scope?.challenger ? `<p class="caption">${esc(dashboard.team.short_name)} Brier error: ${scope.baseline.brier.toFixed(4)} → ${scope.challenger.brier.toFixed(4)} across ${scope.baseline.games} games.</p>` : ""}<details><summary>Feature checks on the older validation season</summary><div class="table-wrap"><table><thead><tr><th>Included signals</th><th>Brier error ↓</th><th>Log loss ↓</th></tr></thead><tbody>${r.ablations.map(a=>`<tr><td>${esc(a.name)}</td><td>${a.validation.brier.toFixed(4)}</td><td>${a.validation.log_loss.toFixed(4)}</td></tr>`).join("")}</tbody></table></div><p class="caption">Each smaller model trains on the first two tuning seasons and validates on the third. These checks do not choose the final challenger.</p></details>`;
+    const advanced = r.version === "advanced-v1";
+    $("matchup-report").innerHTML = `<h3>Does the matchup model help?</h3><p class="caption">${advanced ? `Each comparison season refits using earlier years only. Comparison: ${r.test_seasons[0]}–${r.test_seasons.at(-1)}. Current coefficients use ${r.tuning_seasons[0]}–${r.tuning_seasons.at(-1)}.` : `Frozen corrections trained on ${r.tuning_seasons[0]}–${r.tuning_seasons.at(-1)}, compared on ${r.test_seasons[0]}–${r.test_seasons.at(-1)}.`}</p><div class="table-wrap"><table><thead><tr><th>${b.games} games</th><th>Selected Elo</th><th>${advanced ? "Advanced matchup" : "QB-aware matchup"}</th></tr></thead><tbody><tr><td>Correct winner picks</td><td>${pct(b.accuracy)}</td><td>${pct(c.accuracy)}</td></tr><tr><td>Brier error ↓</td><td>${b.brier.toFixed(4)}</td><td>${c.brier.toFixed(4)}</td></tr><tr><td>Log loss ↓</td><td>${b.log_loss.toFixed(4)}</td><td>${c.log_loss.toFixed(4)}</td></tr></tbody></table></div><p class="caption">${esc(r.reason)}</p>${scope?.baseline && scope?.challenger ? `<p class="caption">${esc(dashboard.team.short_name)} Brier error: ${scope.baseline.brier.toFixed(4)} → ${scope.challenger.brier.toFixed(4)} across ${scope.baseline.games} games.</p>` : ""}<details><summary>${advanced ? "Feature comparisons on later seasons" : "Feature checks on the older validation season"}</summary><div class="table-wrap"><table><thead><tr><th>Included signals</th><th>Brier error ↓</th><th>Log loss ↓</th></tr></thead><tbody>${r.ablations.map(a=>`<tr><td>${esc(a.name)}</td><td>${(a.validation || a.metrics).brier.toFixed(4)}</td><td>${(a.validation || a.metrics).log_loss.toFixed(4)}</td></tr>`).join("")}</tbody></table></div><p class="caption">${advanced ? "Each group refits on earlier seasons before each comparison year. These diagnostics do not select the final model." : "Each smaller model trains on the first two tuning seasons and validates on the third. These checks do not choose the final challenger."}</p></details>`;
   }
   if (warnings.length) $("matchup-report").innerHTML += `<p class="caption">Player/team feeds: ${warnings.length} saved or unavailable files. Forecasts may use older player information. Refresh while online to update.</p>`;
   const forward = dashboard.forward_evaluation;
@@ -189,25 +203,37 @@ function renderProjection() {
 function renderModelReport() {
   const model = dashboard.model, report = model.evaluation;
   $("model-summary").textContent = `Active: ${model.name}. ${model.use_margin ? "Final score margins help measure team strength." : "Wins and losses determine rating changes."}`;
+  if (model.matchup_active && model.matchup_evaluation?.status === "evaluated") {
+    const evidence = model.matchup_evaluation;
+    $("model-report").innerHTML = `<p class="model-evidence"><strong>${pct(evidence.challenger_metrics.accuracy)} correct winner picks</strong><span>${evidence.test_seasons[0]}–${evidence.test_seasons.at(-1)} · ${evidence.baseline.games} regular-season games</span></p><p class="caption">Compared with ${pct(evidence.baseline.accuracy)} for the Elo baseline on the same games. Historical development results; prospective accuracy remains to be measured.</p>`;
+    return;
+  }
   if (report.status !== "evaluated") {
     $("model-report").innerHTML = `<p class="caption">${esc(report.reason)} Original Elo is active for this season.</p>`;
     return;
   }
-  const baseline = report.baseline, candidate = report.challenger_metrics;
+  const baseline = report.baseline, candidate = report.active_metrics;
   const years = `${report.test_seasons[0]}–${report.test_seasons.at(-1)}`;
-  const improvement = report.brier_improvement_pct;
+  const improvement = 100 * (baseline.brier - candidate.brier) / baseline.brier;
   const scope = report.by_team[dashboard.team.code];
-  const teamDelta = scope?.challenger && scope?.baseline ? scope.challenger.brier - scope.baseline.brier : 0;
+  const teamDelta = scope?.active && scope?.baseline ? scope.active.brier - scope.baseline.brier : 0;
   const teamComparison = Math.abs(teamDelta) < 1e-12 ? "the same" : teamDelta < 0 ? "better" : "worse";
   const headline = Math.abs(improvement) < 1e-10 ? "No change in league-wide probability error" : `${Math.abs(improvement).toFixed(1)}% ${improvement >= 0 ? "lower" : "higher"} league-wide probability error`;
   $("model-report").innerHTML = `<p class="model-evidence"><strong>${headline}</strong><span>${esc(years)} · ${baseline.games} regular-season games</span></p>
-    <div class="table-wrap"><table><caption class="sr-only">League-wide historical prediction comparison</caption><thead><tr><th>Historical evaluation</th><th>Original Elo</th><th>${esc(report.challenger.name)}</th></tr></thead><tbody>
+    <div class="table-wrap"><table><caption class="sr-only">League-wide historical prediction comparison</caption><thead><tr><th>Historical evaluation</th><th>Original Elo</th><th>${esc(report.active.name)}</th></tr></thead><tbody>
     <tr><td>Correct winner picks</td><td>${pct(baseline.accuracy)}</td><td>${pct(candidate.accuracy)}</td></tr>
     <tr><td>Probability error (Brier) ↓</td><td>${baseline.brier.toFixed(4)}</td><td>${candidate.brier.toFixed(4)}</td></tr>
     <tr><td>Log loss ↓</td><td>${baseline.log_loss.toFixed(4)}</td><td>${candidate.log_loss.toFixed(4)}</td></tr></tbody></table></div>
-    ${scope?.baseline && scope?.challenger ? `<p class="team-evidence ${color(-teamDelta)}">${esc(dashboard.team.short_name)} subset: probability error ${scope.baseline.brier.toFixed(4)} → ${scope.challenger.brier.toFixed(4)} across ${scope.baseline.games} games. The candidate performed ${teamComparison} on this team’s sample.</p>` : ""}
+    ${scope?.baseline && scope?.active ? `<p class="team-evidence ${color(-teamDelta)}">${esc(dashboard.team.short_name)} subset: probability error ${scope.baseline.brier.toFixed(4)} → ${scope.active.brier.toFixed(4)} across ${scope.baseline.games} games. The selected default performed ${teamComparison} on this team’s sample.</p>` : ""}
+    ${calibrationEvidence(report.calibration)}
     <p class="caption">Settings selected on ${report.tuning_seasons[0]}–${report.tuning_seasons.at(-1)}; later seasons used for evaluation and the default-model decision. Lower error values are better. Same settings for all teams. Ties are excluded from pick accuracy.</p>
     <p class="caption">${esc(report.reason)} These are historical results, not a guarantee of future accuracy.</p>`;
+}
+
+function calibrationEvidence(report) {
+  if (!report) return "";
+  const b = report.baseline, c = report.challenger_metrics;
+  return `<h3>Confidence and rest adjustment</h3><p class="caption">Compared with the previous default: Brier ${b.brier.toFixed(5)} → ${c.brier.toFixed(5)}; log loss ${b.log_loss.toFixed(5)} → ${c.log_loss.toFixed(5)}. ${esc(report.reason)}</p><p class="caption">Learned from older seasons, with missing rest treated as unknown. Small historical gains may be noise; these comparison seasons also inform the default-model decision.</p>`;
 }
 
 function renderTrend() {
@@ -265,6 +291,25 @@ $("matchup-lab").addEventListener("change", event => {
   else return;
   load();
 });
+$("advanced-context").addEventListener("click", async event => {
+  const button = event.target.closest("button[data-confirm-lineup]");
+  if (!button || !dashboard?.matchup?.advanced) return;
+  const team = button.dataset.confirmLineup;
+  const player = team === dashboard.team.code ? dashboard.matchup.selected_qb : dashboard.matchup.opponent_qb;
+  const source = $("lineup-source").value.trim();
+  if (!source) { $("lineup-message").textContent = "Enter the confirmation source."; return; }
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/lineup", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({game_id: dashboard.next_game.id, team, player_id: player, source})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || "Could not save the lineup.");
+    scenarioQB = ""; scenarioOpponentQB = "";
+    await load();
+  } catch (error) {
+    $("lineup-message").textContent = error.message;
+    button.disabled = false;
+  }
+});
 $("team-search").addEventListener("input", () => dashboard && renderRankings());
 document.querySelector(".segmented").addEventListener("click", event => {
   const button = event.target.closest("button[data-filter]");
@@ -284,6 +329,6 @@ try {
   const savedTeam = localStorage.getItem("nfl-dashboard-team");
   if (["PIT", "MIN"].includes(savedTeam)) $("team").value = savedTeam;
   const savedModel = localStorage.getItem("nfl-dashboard-model");
-  if (["auto", "baseline", "elo", "matchup"].includes(savedModel)) $("model").value = savedModel;
+  if (["auto", "baseline", "elo", "matchup", "advanced"].includes(savedModel)) $("model").value = savedModel;
 } catch { /* The dashboard also works without browser storage. */ }
 load();

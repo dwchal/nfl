@@ -1,0 +1,186 @@
+"""Append-only pregame evidence: projected/confirmed QBs, injuries and weather."""
+
+import csv
+import hashlib
+import io
+import json
+import sqlite3
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import urlencode
+from urllib.request import urlopen
+
+from .forecast import kickoff_utc
+from .model import team_key
+from .travel import VENUES
+from .weather import summarize
+
+
+def timestamp(value):
+    result = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if result.tzinfo is None:
+        raise ValueError("Evidence timestamps must include a timezone")
+    return result.astimezone(timezone.utc)
+
+
+class EvidenceStore:
+    def __init__(self, path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        db = self.connect()
+        try:
+            with db:
+                db.execute("CREATE TABLE IF NOT EXISTS evidence (fingerprint TEXT PRIMARY KEY, kind TEXT, key TEXT, available TEXT, payload TEXT)")
+        finally:
+            db.close()
+
+    def connect(self):
+        return sqlite3.connect(self.path)
+
+    def save(self, kind, key, available, payload):
+        available = timestamp(available).isoformat()
+        content = json.dumps(payload, sort_keys=True, allow_nan=False)
+        fingerprint = hashlib.sha256(json.dumps([kind, key, available, content]).encode()).hexdigest()
+        db = self.connect()
+        try:
+            with db:
+                db.execute("INSERT OR IGNORE INTO evidence VALUES (?,?,?,?,?)", (fingerprint, kind, key, available, content))
+        finally:
+            db.close()
+
+    def snapshot(self):
+        db = self.connect()
+        try:
+            rows = db.execute("SELECT kind,key,available,payload,fingerprint FROM evidence ORDER BY available,rowid").fetchall()
+        finally:
+            db.close()
+        indexed, digest = {}, hashlib.sha256()
+        for kind, key, available, payload, fingerprint in rows:
+            indexed.setdefault((kind, key), []).append({**json.loads(payload), "available_at": available})
+            digest.update(fingerprint.encode())
+        return Evidence(indexed, digest.hexdigest())
+
+    def confirm(self, game, team, player_id, name, source, now=None):
+        now = now or datetime.now(timezone.utc)
+        kickoff = kickoff_utc(game)
+        if game.completed or kickoff is None or now >= kickoff or team not in {game.home, game.away}:
+            raise ValueError("A starter can only be confirmed for an upcoming game.")
+        if not player_id or not name or not source.strip():
+            raise ValueError("Choose a quarterback and describe the confirmation source.")
+        self.save("confirmed_qb", f"{game.id}:{team_key(team)}", now.isoformat(),
+                  {"id": player_id, "name": name, "source": source.strip()[:500], "status": "User-confirmed"})
+
+    def import_depth(self, content):
+        reader = csv.DictReader(io.StringIO(content))
+        if not {"dt", "team", "gsis_id", "player_name", "pos_abb", "pos_rank"}.issubset(reader.fieldnames or []):
+            raise ValueError("Timestamped depth charts (2025+) are required")
+        snapshots = {}
+        for row in reader:
+            if row["pos_abb"] != "QB" or row["gsis_id"] in {"", "NA"}:
+                continue
+            when = timestamp(row["dt"]).isoformat()
+            rank = int(row["pos_rank"])
+            snapshots.setdefault((team_key(row["team"]), when), []).append(
+                {"id": row["gsis_id"], "name": row["player_name"], "rank": rank})
+        if not snapshots:
+            raise ValueError("No timestamped quarterbacks found")
+        for (team, when), players in snapshots.items():
+            self.save("depth", team, when, {"players": sorted(players, key=lambda r: (r["rank"], r["id"])),
+                                            "source": "nflverse / ESPN depth chart", "status": "Projected"})
+        return len(snapshots)
+
+    def capture(self, game, bundle, weather=None, now=None):
+        now = now or datetime.now(timezone.utc)
+        kickoff = kickoff_utc(game)
+        if game.completed or kickoff is None or now >= kickoff:
+            return
+        metadata = next((s for s in bundle.get("sources", []) if s["file"] == f"injuries_{game.season}.csv"), {})
+        retrieved = metadata.get("downloaded_at")
+        if retrieved and timestamp(retrieved) <= now and now - timestamp(retrieved) <= timedelta(days=7):
+            injuries = [{"team": team_key(r["team"]), "id": r.get("gsis_id", ""), "name": r.get("full_name", ""),
+                         "position": r.get("position", ""), "status": r.get("report_status", "")}
+                        for r in bundle.get("injuries", []) if r["team"] in {game.home, game.away}
+                        and int(r["week"]) == game.week and r.get("game_type", "REG") == game.kind]
+            # Snapshot time is when this app could use the record; provider dates
+            # are retained separately and cannot backdate later-acquired evidence.
+            payload = {"players": injuries, "source": metadata}
+            previous = self.snapshot().latest("availability", game.id, now)
+            if previous is None or {k: v for k, v in previous.items() if k != "available_at"} != payload:
+                self.save("availability", game.id, now.isoformat(), payload)
+        if weather and weather.get("status") == "forecast" and timestamp(weather["retrieved_at"]) <= now:
+            self.save("weather", game.id, weather["retrieved_at"], {**weather, "roof": game.roof, "kind": "issued_forecast"})
+
+    def historical_weather(self, games, refresh=False):
+        """Import previous-day forecasts, never observed historical conditions.
+
+        Group requests by stadium and season. The latest valid-hour minus 24h
+        is the conservative availability bound for the three-hour window.
+        """
+        grouped, errors, count = {}, [], 0
+        existing = self.snapshot()
+        for game in games:
+            if game.season < 2024 or not game.completed or game.roof != "outdoors" or game.stadium_id not in VENUES or kickoff_utc(game) is None:
+                continue
+            if not refresh and existing.latest("weather", game.id, kickoff_utc(game)):
+                continue
+            grouped.setdefault((game.season, game.stadium_id), []).append(game)
+        fields = ("temperature_2m", "wind_speed_10m", "wind_gusts_10m", "precipitation")
+        for (season, venue), batch in grouped.items():
+            lat, lon = VENUES[venue]
+            query = urlencode({"latitude": lat, "longitude": lon,
+                               "start_date": min(kickoff_utc(g).date() for g in batch).isoformat(),
+                               "end_date": (max(kickoff_utc(g).date() for g in batch) + timedelta(days=1)).isoformat(),
+                               "hourly": ",".join(f"{f}_previous_day1" for f in fields),
+                               "temperature_unit": "fahrenheit", "wind_speed_unit": "mph", "precipitation_unit": "inch", "timezone": "UTC"})
+            url = "https://previous-runs-api.open-meteo.com/v1/forecast?" + query
+            try:
+                with urlopen(url, timeout=30) as response:
+                    raw = response.read(3_000_001)
+                if len(raw) > 3_000_000:
+                    raise ValueError("Weather history too large")
+                payload = json.loads(raw)
+                normalized = {"hourly": {"time": payload["hourly"]["time"],
+                              **{f: payload["hourly"][f"{f}_previous_day1"] for f in fields}}}
+                for game in batch:
+                    kickoff = kickoff_utc(game)
+                    try:
+                        values = summarize(normalized, kickoff)
+                    except (ValueError, KeyError, IndexError, TypeError):
+                        continue
+                    available = kickoff.replace(minute=0, second=0, microsecond=0) - timedelta(hours=22)
+                    self.save("weather", game.id, available.isoformat(),
+                              {**values, "status": "forecast", "roof": "outdoors", "kind": "previous_day1",
+                               "source": "Open-Meteo Previous Runs", "source_url": url, "sha256": hashlib.sha256(raw).hexdigest(),
+                               "retrieved_at": datetime.now(timezone.utc).isoformat(), "lead_hours": 24})
+                    count += 1
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                errors.append(f"{season}/{venue}: {error}")
+        return {"imported": count, "errors": errors}
+
+
+class Evidence:
+    def __init__(self, indexed=None, digest=""):
+        self.indexed, self.digest = indexed or {}, digest
+
+    def latest(self, kind, key, cutoff, max_age=None):
+        if cutoff is None:
+            return None
+        rows = self.indexed.get((kind, key), [])
+        candidates = [r for r in rows if timestamp(r["available_at"]) < cutoff
+                      and (max_age is None or cutoff - timestamp(r["available_at"]) <= max_age)]
+        return candidates[-1] if candidates else None
+
+    def quarterback(self, game, team, fallback, cutoff):
+        confirmed = self.latest("confirmed_qb", f"{game.id}:{team_key(team)}", cutoff)
+        if confirmed:
+            return confirmed
+        depth = self.latest("depth", team_key(team), cutoff, timedelta(days=7))
+        availability = self.latest("availability", game.id, cutoff, timedelta(days=7)) or {}
+        unavailable = {r["id"] for r in availability.get("players", []) if r["team"] == team_key(team) and r["status"].lower() in {"out", "inactive"}}
+        if depth:
+            for player in depth["players"]:
+                if player["id"] not in unavailable:
+                    return {**player, "status": "Projected", "source": depth["source"], "available_at": depth["available_at"]}
+        if fallback[0] in unavailable:
+            return {"id": "", "name": "Unknown available starter", "status": "Unknown", "source": "Previous passer ruled out"}
+        return {"id": fallback[0], "name": fallback[1] or "Unknown", "status": "Previous passer", "source": "Prior game statistics"}

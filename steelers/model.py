@@ -7,7 +7,7 @@ uses regular-season games only.
 """
 
 import math
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from functools import lru_cache
 from itertools import product
 
@@ -24,6 +24,8 @@ class ModelConfig:
     home_advantage: float = HOME_ADVANTAGE
     carryover: float = 2 / 3
     use_margin: bool = False
+    probability_scale: float = 1.0
+    rest_coefficient: float = 0.0
 
 
 BASELINE = ModelConfig()
@@ -33,9 +35,63 @@ def team_key(team):
     return ALIASES.get(team, team)
 
 
-def home_probability(home_rating, away_rating, neutral=False, config=BASELINE):
+def rating_probability(home_rating, away_rating, neutral=False, config=BASELINE):
     advantage = 0 if neutral else config.home_advantage
     return 1 / (1 + 10 ** ((away_rating - home_rating - advantage) / 400))
+
+
+def rest_difference(game):
+    """Rest in weeks, capped at two weeks; unknown rest contributes nothing."""
+    if game.home_rest is None or game.away_rest is None:
+        return 0.0
+    return (max(0, min(14, game.home_rest)) - max(0, min(14, game.away_rest))) / 7
+
+
+def sigmoid(value):
+    return 1 / (1 + math.exp(-max(-35, min(35, value))))
+
+
+def calibrated_probability(probability, config, rest=0.0):
+    if config.probability_scale == 1 and config.rest_coefficient == 0:
+        return probability
+    probability = max(1e-12, min(1 - 1e-12, probability))
+    odds = math.log(probability / (1 - probability))
+    return sigmoid(config.probability_scale * odds + config.rest_coefficient * rest)
+
+
+def home_probability(home_rating, away_rating, neutral=False, config=BASELINE, rest=0.0):
+    return calibrated_probability(rating_probability(home_rating, away_rating, neutral, config), config, rest)
+
+
+def game_probability(home_rating, away_rating, game, config=BASELINE):
+    return home_probability(home_rating, away_rating, game.neutral, config, rest_difference(game))
+
+
+def fit_calibration(forecasts, config):
+    """Fit confidence/rest on older forecasts, shrinking toward unchanged Elo.
+
+    The fixed L2 penalty is shared with the matchup model. Calibration changes
+    forecast probabilities only; the underlying team-strength updates stay Elo.
+    """
+    weights = [0.0, 0.0]
+    inputs = []
+    for row in forecasts:
+        p = max(1e-12, min(1 - 1e-12, row["probability"]))
+        inputs.append((math.log(p / (1 - p)), row["rest"], row["result"]))
+    for _ in range(300):
+        gradient = [0.0, 0.0]
+        for odds, rest, result in inputs:
+            error = sigmoid((1 + weights[0]) * odds + weights[1] * rest) - result
+            gradient[0] += error * odds
+            gradient[1] += error * rest
+        steps = [.5 * (g / max(1, len(inputs)) + .03 * w) for g, w in zip(gradient, weights)]
+        # Keep confidence monotonic and limit extrapolation on unusual histories.
+        weights = [max(-.5, min(.5, weights[0] - steps[0])),
+                   max(-1., min(1., weights[1] - steps[1]))]
+        if max(abs(s) for s in steps) < 1e-7:
+            break
+    return replace(config, name=f"Calibrated {config.name[0].lower()}{config.name[1:]}",
+                   probability_scale=1 + weights[0], rest_coefficient=weights[1])
 
 
 def margin_multiplier(margin, winner_difference):
@@ -47,7 +103,8 @@ def margin_multiplier(margin, winner_difference):
 
 
 def update_ratings(ratings, home, away, result, neutral=False, config=BASELINE, margin=None):
-    expected = home_probability(ratings[home], ratings[away], neutral, config)
+    # Rest and confidence are a forecast layer, not additional team strength.
+    expected = rating_probability(ratings[home], ratings[away], neutral, config)
     multiplier = 1.0
     if config.use_margin and margin is not None:
         difference = ratings[home] - ratings[away] + (0 if neutral else config.home_advantage)
@@ -76,11 +133,11 @@ def replay_season(games, season, config=BASELINE, team=None):
             continue
         result = 1.0 if game.home_score > game.away_score else 0.0 if game.home_score < game.away_score else .5
         # Forecast first, then observe the score. No game's score predicts itself.
-        probability = home_probability(ratings[home], ratings[away], game.neutral, config)
+        probability = game_probability(ratings[home], ratings[away], game, config)
         if game.season == season:
             predictions.append({"id": game.id, "season": season, "kind": game.kind,
                                 "home": home, "away": away, "probability": probability,
-                                "result": result})
+                                "result": result, "week": game.week, "rest": rest_difference(game)})
         update_ratings(ratings, home, away, result, game.neutral, config,
                        game.home_score - game.away_score)
         if game.season == season and team in {home, away}:
@@ -158,12 +215,36 @@ def _select_model(games, season):
                 and challenger_score["log_loss"] < baseline_score["log_loss"])
     active = challenger if promoted else BASELINE
     active_predictions = challenger_predictions if promoted else baseline_predictions
+    # Fit only on the older window. Later seasons gate deployment against the
+    # existing default, never just against the weaker original Elo baseline.
+    calibrated = fit_calibration(backtest(tuning_games, tuning_years, challenger), challenger)
+    calibrated_predictions = [{**p, "probability": calibrated_probability(p["probability"], calibrated, p["rest"])}
+                              for p in challenger_predictions]
+    calibrated_score = metrics(calibrated_predictions)
+    incumbent_score = metrics(active_predictions)
+    calibration_promoted = (calibrated_score["brier"] < incumbent_score["brier"]
+                            and calibrated_score["log_loss"] < incumbent_score["log_loss"])
+    calibration = {
+        "status": "evaluated", "version": "confidence-rest-v1", "candidate": asdict(calibrated),
+        "training_seasons": tuning_years, "penalty": .03, "promoted": calibration_promoted,
+        "incumbent": asdict(active), "baseline": incumbent_score, "challenger_metrics": calibrated_score,
+        "brier_improvement_pct": 100 * (incumbent_score["brier"] - calibrated_score["brier"]) / incumbent_score["brier"],
+        "by_team": {team: {"baseline": metrics(active_predictions, team),
+                           "challenger": metrics(calibrated_predictions, team)} for team in ("PIT", "MIN")},
+        "by_season": [{"season": year,
+                       "baseline": metrics([p for p in active_predictions if p["season"] == year]),
+                       "challenger": metrics([p for p in calibrated_predictions if p["season"] == year])} for year in test_years],
+        "reason": "Confidence and rest calibration improved both probability scores against the previous default."
+                  if calibration_promoted else "Calibration did not improve both probability scores; the previous default is retained.",
+    }
+    if calibration_promoted:
+        active, active_predictions = calibrated, calibrated_predictions
     report = {
         "status": "evaluated", "active": asdict(active), "challenger": asdict(challenger),
         "promoted": promoted, "tuning_seasons": tuning_years, "test_seasons": test_years,
         "candidates": len(candidates), "tuning": tuning_score,
         "baseline": baseline_score, "challenger_metrics": challenger_score,
-        "active_metrics": challenger_score if promoted else baseline_score,
+        "active_metrics": metrics(active_predictions), "calibration": calibration,
         "brier_improvement_pct": 100 * (baseline_score["brier"] - challenger_score["brier"]) / baseline_score["brier"],
         "by_season": [{"season": year,
                        "baseline": metrics([p for p in baseline_predictions if p["season"] == year]),
@@ -173,7 +254,7 @@ def _select_model(games, season):
                            "challenger": metrics(challenger_predictions, team),
                            "active": metrics(active_predictions, team)} for team in ("PIT", "MIN")},
         "reliability": reliability_bins(active_predictions),
-        "reason": "Margin-aware settings improved both Brier score and log loss on later seasons."
-                  if promoted else "The tested challenger did not improve both probability scores; original Elo remains active.",
+        "reason": ("Margin-aware settings improved both Brier score and log loss on later seasons. "
+                   if promoted else "The margin-aware challenger did not improve both probability scores. ") + calibration["reason"],
     }
     return active, report

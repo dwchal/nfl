@@ -4,9 +4,10 @@ from dataclasses import replace
 from datetime import date, timedelta
 from unittest.mock import patch
 
-from steelers.analysis import build_dashboard
+from steelers.analysis import build_dashboard, project_season
 from steelers.data import Game
 from steelers.model import (BASELINE, ModelConfig, backtest, home_probability,
+                           calibrated_probability, fit_calibration, game_probability, rest_difference,
                            margin_multiplier, metrics, reliability_bins,
                            replay_season, select_model, update_ratings)
 
@@ -19,6 +20,46 @@ def game(identifier, year, day, home_score, away_score, neutral=False, kind="REG
 
 
 class ModelTests(unittest.TestCase):
+    def test_calibration_preserves_strength_updates_and_uses_known_rest(self):
+        config = replace(MARGIN_MODEL, probability_scale=.8, rest_coefficient=.2)
+        first = replace(game("a", 2026, 1, 21, 14), home_rest=14, away_rest=7)
+        later = game("b", 2026, 8, 0, 30)
+        old_ratings, _, old = replay_season([first, later], 2026, MARGIN_MODEL)
+        ratings, _, new = replay_season([first, later], 2026, config)
+        self.assertEqual(old_ratings, ratings)
+        self.assertAlmostEqual(new[0]["probability"], game_probability(1500, 1500, first, config))
+        self.assertNotEqual(new[0]["probability"], old[0]["probability"])
+        altered = replay_season([first, replace(later, home_score=100)], 2026, config)[2]
+        self.assertEqual([r["probability"] for r in new], [r["probability"] for r in altered])
+        self.assertEqual(rest_difference(replace(first, home_rest=None)), 0)
+        self.assertEqual(rest_difference(replace(first, home_rest=100)), 1)
+        swapped = replace(first, home_rest=7, away_rest=14, neutral=True)
+        self.assertAlmostEqual(game_probability(1500, 1500, swapped, config),
+                               1 - game_probability(1500, 1500, replace(first, neutral=True), config))
+
+    def test_calibration_shrinks_overconfidence_and_learns_rest(self):
+        rows = [{"probability": .9, "rest": 0., "result": float(i % 4 != 0)} for i in range(100)]
+        fitted = fit_calibration(rows, MARGIN_MODEL)
+        self.assertLess(fitted.probability_scale, 1)
+        self.assertLess(calibrated_probability(.9, fitted), .9)
+        self.assertGreaterEqual(fitted.probability_scale, .5)
+        rows = [{"probability": .5, "rest": 1 if i % 2 else -1, "result": float(i % 2)} for i in range(100)]
+        fitted = fit_calibration(rows, MARGIN_MODEL)
+        self.assertGreater(fitted.rest_coefficient, 0)
+        self.assertEqual(calibrated_probability(.5, fitted), .5)
+        self.assertEqual(fit_calibration([], MARGIN_MODEL).probability_scale, 1)
+
+    def test_upcoming_dashboard_and_simulation_apply_calibrated_rest(self):
+        config = replace(MARGIN_MODEL, probability_scale=.8, rest_coefficient=.8)
+        future = replace(game("next", 2026, 1, None, None, neutral=True), home_rest=14, away_rest=7)
+        expected = game_probability(1500, 1500, future, config)
+        with patch("steelers.analysis.select_model", return_value=(config, {})):
+            dashboard = build_dashboard([future], 2026, simulations=100)
+        self.assertAlmostEqual(dashboard["next_game"]["win_probability"], expected, places=4)
+        projection = project_season([future], {"PIT": 1500., "BAL": 1500.}, 0, 0, 0,
+                                    simulations=4000, config=config)
+        self.assertAlmostEqual(projection["expected_wins"], expected, delta=.05)
+
     def test_blowouts_have_more_weight_and_favorites_have_correction(self):
         narrow, blowout = {"PIT": 1500., "BAL": 1500.}, {"PIT": 1500., "BAL": 1500.}
         update_ratings(narrow, "PIT", "BAL", 1, config=MARGIN_MODEL, margin=1)
@@ -105,6 +146,7 @@ class ModelSelectionTests(unittest.TestCase):
         _, altered = select_model(changed, 2026)
         self.assertEqual(original["challenger"], altered["challenger"])
         self.assertEqual(original["tuning"], altered["tuning"])
+        self.assertEqual(original["calibration"]["candidate"], altered["calibration"]["candidate"])
         self.assertNotEqual(original["baseline"], altered["baseline"])
 
     def test_tuning_receives_no_test_season_results(self):
@@ -118,15 +160,20 @@ class ModelSelectionTests(unittest.TestCase):
             games, years = call.args[:2]
             if years == [2019, 2020, 2021]:
                 self.assertTrue(all(g.season <= 2021 for g in games))
-        self.assertEqual(sum(call.args[1] == [2019, 2020, 2021] for call in evaluate.call_args_list), 28)
+        self.assertEqual(sum(call.args[1] == [2019, 2020, 2021] for call in evaluate.call_args_list), 29)
 
     def test_default_requires_both_scores_to_improve_and_baseline_is_selectable(self):
         active, report = select_model(self.history, 2026)
         if report["promoted"]:
             self.assertLess(report["challenger_metrics"]["brier"], report["baseline"]["brier"])
             self.assertLess(report["challenger_metrics"]["log_loss"], report["baseline"]["log_loss"])
-        else:
+        elif not report["calibration"]["promoted"]:
             self.assertEqual(active, BASELINE)
+        calibration = report["calibration"]
+        if calibration["promoted"]:
+            self.assertLess(calibration["challenger_metrics"]["brier"], calibration["baseline"]["brier"])
+            self.assertLess(calibration["challenger_metrics"]["log_loss"], calibration["baseline"]["log_loss"])
+            self.assertEqual(active.probability_scale, calibration["candidate"]["probability_scale"])
         current = game("current", 2026, 1, 21, 14)
         dashboard = build_dashboard(self.history + [current], 2026, simulations=50, model="baseline")
         self.assertEqual(dashboard["model"]["name"], "Original Elo")

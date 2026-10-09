@@ -7,7 +7,7 @@ from dataclasses import asdict
 from datetime import date
 
 from .model import (BASELINE, BASE_RATING, HOME_ADVANTAGE, K_FACTOR,
-                    home_probability, replay_season, select_model, team_key, update_ratings)
+                    home_probability, game_probability, replay_season, select_model, team_key, update_ratings)
 
 SIMULATIONS = 10000
 AFC_NORTH = {"PIT", "BAL", "CIN", "CLE"}
@@ -75,7 +75,7 @@ def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIO
             home, away = team_key(game.home), team_key(game.away)
             sample_ratings.setdefault(home, BASE_RATING)
             sample_ratings.setdefault(away, BASE_RATING)
-            probability = home_probability(sample_ratings[home], sample_ratings[away], game.neutral, config)
+            probability = game_probability(sample_ratings[home], sample_ratings[away], game, config)
             if odds_multipliers:
                 multiplier = odds_multipliers.get(game.id, 1)
                 probability = probability * multiplier / (1 - probability + probability * multiplier)
@@ -124,11 +124,11 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
     season = default_season(team_games) if season is None else season
     if season not in seasons:
         raise ValueError("That season is not available in the schedule.")
-    if model not in {"auto", "baseline", "elo", "matchup"}:
+    if model not in {"auto", "baseline", "elo", "matchup", "advanced"}:
         raise ValueError("Choose the backtested default or original Elo model.")
     automatic_config, evaluation = select_model(games, season)
     config = BASELINE if model == "baseline" else automatic_config
-    use_matchup = matchup is not None and matchup.report["status"] == "evaluated" and (model == "matchup" or (model == "auto" and matchup.report["promoted"]))
+    use_matchup = matchup is not None and matchup.report["status"] == "evaluated" and (model in {"matchup", "advanced"} or (model == "auto" and matchup.report["promoted"]))
     all_season = [g for g in games if g.season == season]
     selected = [g for g in all_season if include_playoffs or g.kind == "REG"]
     # Regular-season views exclude postseason results from ratings and next game.
@@ -151,8 +151,8 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
         if game.completed:
             result = "W" if scored > allowed else "L" if scored < allowed else "T"
             cumulative += scored - allowed
-        p_home = home_probability(ratings.get(team_key(game.home), BASE_RATING),
-                                  ratings.get(team_key(game.away), BASE_RATING), game.neutral, config)
+        p_home = game_probability(ratings.get(team_key(game.home), BASE_RATING),
+                                 ratings.get(team_key(game.away), BASE_RATING), game, config)
         prior_probability = pregame[game.id]["probability"] if game.completed else None
         if use_matchup:
             if game.completed:
@@ -191,7 +191,7 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
             "elo_history": history, "form": [g["result"] for g in completed[-5:]],
             "latest_result_date": max((g.day.isoformat() for g in selected if g.completed), default=None),
             "model": {**asdict(config), "choice": model, "evaluation": evaluation,
-                      "name": "QB-aware matchup" if use_matchup else config.name,
+                      "name": ("Advanced matchup" if model == "advanced" else "QB-aware matchup") if use_matchup else config.name,
                       "matchup_evaluation": matchup.report if matchup else None,
                       "matchup_active": use_matchup,
                       "initial_rating": BASE_RATING, "warmup_seasons": 3}}

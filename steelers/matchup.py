@@ -8,7 +8,7 @@ Corrections are regularized logistic regression, implemented in the stdlib.
 import math
 from dataclasses import dataclass
 
-from .model import BASE_RATING, home_probability, metrics, replay_season, team_key, update_ratings
+from .model import BASE_RATING, metrics, replay_season, rest_difference, team_key, update_ratings
 
 VERSION = "matchup-v1"
 LABELS = ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense", "Rest advantage", "Quarterback change")
@@ -46,7 +46,7 @@ class FeatureState:
         h, a = self.strength(home), self.strength(away)
         hq = home_qb if home_qb is not None else self.last_qb.get(home, ("", ""))[0]
         aq = away_qb if away_qb is not None else self.last_qb.get(away, ("", ""))[0]
-        rest = 0 if game.home_rest is None or game.away_rest is None else (min(14, game.home_rest) - min(14, game.away_rest)) / 7
+        rest = rest_difference(game)
         # QB skill already appears in team offense; estimate only the change
         # relative to that offense, rather than adding a second full QB rating.
         h_change = self.qb_quality(hq)[0] - h[0] if hq else 0
@@ -88,9 +88,9 @@ class FeatureState:
             self.league = [old + new for old, new in zip(self.league, (row.passing_epa, row.dropbacks, row.rushing_epa, row.carries))]
 
 
-def replay(games, season, config, bundle):
+def replay(games, season, config, bundle, state=None):
     """Return input rows, current state, and Elo; no target's own stats enter it."""
-    state, ratings, rows, pending = FeatureState(), {}, [], []
+    state, ratings, rows, pending = state or FeatureState(), {}, [], []
     elo_predictions = {p["id"]: p["probability"] for year in range(season - 8, season + 1)
                        for p in replay_season(games, year, config)[2]}
     year = None
@@ -118,7 +118,7 @@ def replay(games, season, config, bundle):
         probability = elo_predictions[game.id]
         key = (game.season, game.week, "REG" if game.kind == "REG" else "POST")
         result = float(game.home_score > game.away_score) if game.home_score != game.away_score else .5
-        rows.append({"id": game.id, "season": game.season, "kind": game.kind, "home": home, "away": away,
+        rows.append({"id": game.id, "season": game.season, "week": game.week, "kind": game.kind, "home": home, "away": away,
                      "probability": probability, "offset": logit(probability), "features": state.features(game),
                      "result": result, "covered": all((*key, t) in bundle["team"] and (*key, t) in bundle["player"] for t in (game.home, game.away))})
         update_ratings(ratings, home, away, result, game.neutral, config, game.home_score - game.away_score)
@@ -130,9 +130,10 @@ def replay(games, season, config, bundle):
 
 
 def fit(rows, indices, penalty=.03):
-    weights = [0.] * 6
+    width = len(rows[0]["features"]) if rows else max(6, max(indices, default=-1) + 1)
+    weights = [0.] * width
     for _ in range(300):
-        gradient = [0.] * 6
+        gradient = [0.] * width
         for row in rows:
             x = [max(-4, min(4, v)) for v in row["features"]]
             error = sigmoid(row["offset"] + sum(weights[i] * x[i] for i in indices)) - row["result"]
@@ -213,7 +214,7 @@ def explain(model, game, elo_probability, team):
     features = model.state.features(game)
     running = elo_probability
     contributions = []
-    for label, feature, weight in zip(LABELS, features, model.weights):
+    for label, feature, weight in zip(getattr(model, "labels", LABELS), features, model.weights):
         updated = corrected(running, [feature], [weight])
         delta = sign * (updated - running)
         contributions.append({"label": label, "change": delta})
@@ -240,7 +241,7 @@ def next_context(model, game, elo_probability, team, bundle, selected_qb="", opp
     injuries = [r for r in bundle["injuries"] if r["team"] in {team, opponent}
                 and int(r["week"]) == game.week and r.get("game_type", "REG") == game.kind]
     return {"game_id": game.id, "team_qbs": options, "opponent_qbs": opposing,
-            "features": dict(zip(LABELS, model.state.features(game))), "elo_home_probability": elo_probability,
+            "features": dict(zip(getattr(model, "labels", LABELS), model.state.features(game))), "elo_home_probability": elo_probability,
             "selected_qb": selected_qb, "opponent_qb": opponent_qb,
             "probability": convert(probability), "default_probability": convert(regular_probability),
             "elo_probability": convert(elo_probability), "contributions": explain(model, game, elo_probability, team),
