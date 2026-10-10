@@ -210,7 +210,11 @@ def evaluate_advanced(games, season, config, bundle, data):
     b, c = metrics(baseline), metrics(predictions)
     qualifies = (optimizer["converged"] and c["brier"] < b["brier"] and c["log_loss"] < b["log_loss"]
                  and c["accuracy"] > b["accuracy"])
-    report.update(status="evaluated", name="Advanced matchup", baseline=b, challenger_metrics=c,
+    reason = ("The advanced correction fit did not converge; forecasts use Elo without advanced corrections."
+              if not optimizer["converged"] else
+              "Annual chronological evaluation; explicit experimental selection only. Availability/weather coefficients stay zero until at least 100 earlier snapshots are available. Confirmed lineups require timestamped evidence.")
+    report.update(status="evaluated" if optimizer["converged"] else "unavailable",
+                  name="Advanced matchup", baseline=b, challenger_metrics=c,
                   tuning_seasons=years, test_seasons=years[3:], by_season=folds, support=support,
                   weights=dict(zip(LABELS, weights)), qualifies=qualifies, optimizer=optimizer,
                   by_team={t: {"baseline": metrics(baseline, t), "challenger": metrics(predictions, t)} for t in ("PIT", "MIN")},
@@ -219,8 +223,9 @@ def evaluate_advanced(games, season, config, bundle, data):
                               for name, values in ablations.items()] + [{"name": "+ forecast weather / supported availability", "metrics": c, "optimizer": None}],
                   uncertainty=paired_uncertainty(baseline, predictions),
                   brier_improvement_pct=100 * (b["brier"] - c["brier"]) / b["brier"],
-                  reason="Annual chronological evaluation; explicit experimental selection only. Availability/weather coefficients stay zero until at least 100 earlier snapshots are available. Confirmed lineups require timestamped evidence.")
-    probabilities = {r["id"]: corrected(r["probability"], r["features"], weights) for r in rows if r["season"] == season}
+                  reason=reason)
+    probabilities = ({r["id"]: corrected(r["probability"], r["features"], weights) for r in rows if r["season"] == season}
+                     if optimizer["converged"] else {})
     return AdvancedModel(weights, state, report), probabilities
 
 

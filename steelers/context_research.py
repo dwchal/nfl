@@ -207,7 +207,8 @@ def experiment(games, stats, start=2021, end=2025, history_start=2016):
             target = [r for r in baseline if r["season"] == year]
             if len(training) < 500 or len(target) < 200:
                 raise ValueError(f"Insufficient complete history for {year}")
-            weights, optimizer = fit_logistic_offset(training, indices, penalty=.1)
+            full_weights, optimizer = fit_logistic_offset(training, indices, penalty=.1)
+            weights = [full_weights[i] for i in indices]
             if not optimizer["converged"]:
                 # A failed fit cannot silently become a forecast: score the
                 # documented zero-correction (Elo) fallback on the same games.

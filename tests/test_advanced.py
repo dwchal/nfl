@@ -13,6 +13,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from app import make_handler
+from steelers.analysis import build_dashboard
 from steelers.advanced import (AdvancedModel, AdvancedState, AdvancedStore, LABELS,
                               WEATHER_START, enabled_indices, evaluate_advanced)
 from steelers.data import ScheduleStore
@@ -124,6 +125,31 @@ class EvidenceTests(unittest.TestCase):
 
 
 class AdvancedFeaturesTests(unittest.TestCase):
+    def test_failed_final_fit_disables_advanced_forecasts_in_dashboard(self):
+        games = [replace(fixture(f"{year}-{i}", week=i + 1, year=year),
+                         day=fixture(year=year).day + timedelta(days=i))
+                 for year in range(2020, 2026) for i in range(200)]
+        games.append(fixture("target", year=2026, home_score=None, away_score=None))
+        plays = {g.id: {team: [[0., 30.]] * 8 for team in (g.home, g.away)} for g in games}
+        def fitting(rows, indices, penalty):
+            final = len(rows) == 1200
+            return (.1,) * len(LABELS), {"status": "max_iterations" if final else "converged",
+                                        "converged": not final}
+        with patch("steelers.advanced.select_model", return_value=(BASELINE, {})), \
+             patch("steelers.advanced.fit_diagnostic", side_effect=fitting):
+            model, probabilities = evaluate_advanced(games, 2026, BASELINE, bundle_for(games), {"plays": plays})
+        self.assertEqual(model.report["status"], "unavailable")
+        self.assertIn("did not converge", model.report["reason"])
+        self.assertFalse(model.report["qualifies"])
+        self.assertFalse(any(model.weights))
+        self.assertEqual(probabilities, {})
+        self.assertIsNotNone(model.report["challenger_metrics"])
+        with patch("steelers.analysis.select_model", return_value=(BASELINE, {})):
+            dashboard = build_dashboard(games, 2026, model="advanced", matchup=model,
+                                        matchup_pregame=probabilities, simulations=20)
+        self.assertFalse(dashboard["model"]["matchup_active"])
+        self.assertEqual(dashboard["model"]["name"], BASELINE.name)
+
     def test_annual_fitting_excludes_target_results_and_emits_paired_evaluation(self):
         games = [replace(fixture(f"{year}-{i}", week=i + 1, year=year),
                          day=fixture(year=year).day + timedelta(days=i))

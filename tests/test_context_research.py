@@ -3,9 +3,11 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import patch
 
-from steelers.context_research import (EfficiencyState, REQUIRED, feature_history,
+from steelers.context_research import (EfficiencyState, GROUPS, LABELS, REQUIRED, experiment, feature_history,
                                        fit, load_stats, pick_comparison, roof_type, schedule_features)
+from steelers.model import BASELINE, metrics, sigmoid
 from test_matchup import fixture
 
 
@@ -16,6 +18,30 @@ def statistics(games):
 
 
 class ContextResearchTests(unittest.TestCase):
+    def test_experiment_maps_full_width_weights_to_selected_features(self):
+        features = [0.1 * (i + 1) for i in range(len(LABELS))]
+        rows = [{"id": str(i), "season": year, "week": 1, "home": "PIT", "away": "MIN",
+                 "probability": .5, "result": float(i % 2)}
+                for year, count in ((2017, 500), (2018, 200)) for i in range(count)]
+        inputs = {r["id"]: features for r in rows}
+        def fitting(training, indices, penalty):
+            weights = [.01 * (i + 1) if i in indices else 0. for i in range(len(LABELS))]
+            return weights, {"converged": True}
+        with patch("steelers.context_research.feature_history", return_value=inputs), \
+             patch("steelers.context_research.select_model", return_value=(BASELINE, {})), \
+             patch("steelers.context_research.backtest", side_effect=lambda games, years, config: [r for r in rows if r["season"] in years]), \
+             patch("steelers.context_research.fit_logistic_offset", side_effect=fitting), \
+             patch("steelers.context_research.paired_uncertainty"), \
+             patch("steelers.context_research.pick_comparison"):
+            report = experiment([], {}, start=2018, end=2018)
+        for name, indices in GROUPS.items():
+            with self.subTest(group=name):
+                probability = sigmoid(sum(.01 * (i + 1) * features[i] for i in indices))
+                expected = metrics([{**r, "probability": probability} for r in rows if r["season"] == 2018])
+                actual = report["experiments"][name]
+                self.assertEqual(actual["metrics"], expected)
+                self.assertEqual(actual["by_season"][0]["weights"], {LABELS[i]: .01 * (i + 1) for i in indices})
+
     def test_winner_comparison_excludes_ties_and_reports_new_errors(self):
         old = [{"id": str(i), "season": 2025, "week": 1, "probability": .4, "result": r}
                for i, r in enumerate((1., 1., 0., .5))]

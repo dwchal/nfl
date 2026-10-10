@@ -571,8 +571,8 @@
     "Kickoff time": {
       "metrics": {
         "games": 1359,
-        "brier": 0.2235849624997045,
-        "log_loss": 0.6398081288108229,
+        "brier": 0.22354954658506732,
+        "log_loss": 0.6398334375304494,
         "accuracy": 0.6317343173431734,
         "ties": 4
       },
@@ -587,8 +587,8 @@
           ],
           "weights": {
             "Home field": -0.06225438591366546,
-            "Early kickoff ET": 0.0,
-            "Evening kickoff ET": 0.0
+            "Early kickoff ET": -0.03186130406546175,
+            "Evening kickoff ET": 0.024157724194189517
           },
           "optimizer": {
             "status": "converged",
@@ -606,9 +606,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.22925996383822153,
-            "log_loss": 0.6535822086111106,
-            "accuracy": 0.6014760147601476,
+            "brier": 0.2286483780523515,
+            "log_loss": 0.6523710093960784,
+            "accuracy": 0.5977859778597786,
             "ties": 1
           }
         },
@@ -623,8 +623,8 @@
           ],
           "weights": {
             "Home field": -0.07965989790225089,
-            "Early kickoff ET": 0.0,
-            "Evening kickoff ET": 0.0
+            "Early kickoff ET": -0.051892130355931744,
+            "Evening kickoff ET": 0.031385159851266636
           },
           "optimizer": {
             "status": "converged",
@@ -642,9 +642,9 @@
           },
           "candidate": {
             "games": 271,
-            "brier": 0.2229385511107543,
-            "log_loss": 0.638929796969047,
-            "accuracy": 0.6245353159851301,
+            "brier": 0.22342620439939814,
+            "log_loss": 0.6401490762695631,
+            "accuracy": 0.6356877323420075,
             "ties": 2
           }
         },
@@ -660,8 +660,8 @@
           ],
           "weights": {
             "Home field": -0.0735683649735903,
-            "Early kickoff ET": 0.0,
-            "Evening kickoff ET": 0.0
+            "Early kickoff ET": -0.03031873186516892,
+            "Evening kickoff ET": 0.02294826157007038
           },
           "optimizer": {
             "status": "converged",
@@ -679,9 +679,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.2335032181712473,
-            "log_loss": 0.6599815093940999,
-            "accuracy": 0.6029411764705882,
+            "brier": 0.23372039246279677,
+            "log_loss": 0.6604353499163478,
+            "accuracy": 0.5992647058823529,
             "ties": 0
           }
         },
@@ -697,8 +697,8 @@
           ],
           "weights": {
             "Home field": -0.08020286887819869,
-            "Early kickoff ET": 0.0,
-            "Evening kickoff ET": 0.0
+            "Early kickoff ET": -0.02497934927289319,
+            "Evening kickoff ET": 0.007205982765731693
           },
           "optimizer": {
             "status": "converged",
@@ -716,9 +716,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.20985815453458553,
-            "log_loss": 0.6089393283821676,
-            "accuracy": 0.6764705882352942,
+            "brier": 0.2095861505954374,
+            "log_loss": 0.6084369464856023,
+            "accuracy": 0.6801470588235294,
             "ties": 0
           }
         },
@@ -734,8 +734,8 @@
           ],
           "weights": {
             "Home field": -0.09896578096279578,
-            "Early kickoff ET": 0.0,
-            "Evening kickoff ET": 0.0
+            "Early kickoff ET": -0.0459515876020787,
+            "Evening kickoff ET": 0.009009938880783566
           },
           "optimizer": {
             "status": "converged",
@@ -753,9 +753,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.22236254833125452,
-            "log_loss": 0.6376045715365053,
-            "accuracy": 0.6531365313653137,
+            "brier": 0.22236615395143497,
+            "log_loss": 0.6377759660211947,
+            "accuracy": 0.6457564575645757,
             "ties": 1
           }
         }
@@ -771,8 +771,8 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.26412187586125746,
-            "log_loss": 0.7329477393593771,
+            "brier": 0.26310678354114264,
+            "log_loss": 0.7308505145192922,
             "accuracy": 0.5119047619047619,
             "ties": 1
           }
@@ -787,9 +787,9 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.22348376929574576,
-            "log_loss": 0.6381195465487216,
-            "accuracy": 0.6,
+            "brier": 0.22303264098548192,
+            "log_loss": 0.6373687790785704,
+            "accuracy": 0.611764705882353,
             "ties": 0
           }
         }
@@ -800,29 +800,29 @@
         "blocks": 90,
         "direction": "Negative candidate-minus-baseline deltas favor candidate.",
         "brier": {
-          "delta": -0.000535631893789007,
+          "delta": -0.000571047808426195,
           "interval_95": [
-            -0.0013860082775377911,
-            0.0002647288909479123
+            -0.0015620674642345194,
+            0.000393145965853738
           ]
         },
         "log_loss": {
-          "delta": -0.0008119618962853187,
+          "delta": -0.0007866531766590154,
           "interval_95": [
-            -0.0027324023620409945,
-            0.0010113818751642163
+            -0.0030303764903914956,
+            0.0014019890909129447
           ]
         }
       },
       "winner_picks": {
         "decisive_games": 1355,
-        "corrected_picks": 25,
-        "new_errors": 18,
+        "corrected_picks": 29,
+        "new_errors": 22,
         "net_correct_picks": 7,
         "accuracy_delta": 0.0051660516605166054,
         "interval_95": [
-          -0.0036603221083455345,
-          0.013858497447118891
+          -0.004395604395604396,
+          0.014716703458425313
         ],
         "method": "Paired season/week block bootstrap",
         "samples": 2000
@@ -831,9 +831,9 @@
     "Day of week": {
       "metrics": {
         "games": 1359,
-        "brier": 0.22357407746725447,
-        "log_loss": 0.6398248560903521,
-        "accuracy": 0.629520295202952,
+        "brier": 0.2236026656276417,
+        "log_loss": 0.6399039731086658,
+        "accuracy": 0.6280442804428045,
         "ties": 4
       },
       "by_season": [
@@ -847,9 +847,9 @@
           ],
           "weights": {
             "Home field": -0.0689686100642814,
-            "Thursday": 0.0,
-            "Monday": 0.0,
-            "Saturday": 0.0
+            "Thursday": -0.001817803955314875,
+            "Monday": -0.02572769642926934,
+            "Saturday": -0.017660597817601393
           },
           "optimizer": {
             "status": "converged",
@@ -867,8 +867,8 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.2290961364532289,
-            "log_loss": 0.6532911063828102,
+            "brier": 0.22914953289834983,
+            "log_loss": 0.6534180548824325,
             "accuracy": 0.5977859778597786,
             "ties": 1
           }
@@ -884,9 +884,9 @@
           ],
           "weights": {
             "Home field": -0.09304154945286708,
-            "Thursday": 0.0,
-            "Monday": 0.0,
-            "Saturday": 0.0
+            "Thursday": -0.010471387228723403,
+            "Monday": -0.005610316659641347,
+            "Saturday": -0.016562687874750102
           },
           "optimizer": {
             "status": "converged",
@@ -904,9 +904,9 @@
           },
           "candidate": {
             "games": 271,
-            "brier": 0.22299950522765216,
-            "log_loss": 0.6390913218165137,
-            "accuracy": 0.6282527881040892,
+            "brier": 0.22303013778534148,
+            "log_loss": 0.6391409193121944,
+            "accuracy": 0.6245353159851301,
             "ties": 2
           }
         },
@@ -922,9 +922,9 @@
           ],
           "weights": {
             "Home field": -0.08003710668099981,
-            "Thursday": 0.0,
-            "Monday": 0.0,
-            "Saturday": 0.0
+            "Thursday": -0.017615731909978054,
+            "Monday": -0.008079552327299695,
+            "Saturday": -0.0037599521719350183
           },
           "optimizer": {
             "status": "converged",
@@ -942,8 +942,8 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.233507430828502,
-            "log_loss": 0.6599859217781877,
+            "brier": 0.2334695705924513,
+            "log_loss": 0.6598827675451728,
             "accuracy": 0.5992647058823529,
             "ties": 0
           }
@@ -960,9 +960,9 @@
           ],
           "weights": {
             "Home field": -0.08624006032231218,
-            "Thursday": 0.0,
-            "Monday": 0.0,
-            "Saturday": 0.0
+            "Thursday": -0.015380317444130136,
+            "Monday": -0.024748643582443955,
+            "Saturday": -0.003833134817857756
           },
           "optimizer": {
             "status": "converged",
@@ -980,8 +980,8 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.20983228949849972,
-            "log_loss": 0.6089241361929026,
+            "brier": 0.20980363701554058,
+            "log_loss": 0.6089142259519966,
             "accuracy": 0.6727941176470589,
             "ties": 0
           }
@@ -998,9 +998,9 @@
           ],
           "weights": {
             "Home field": -0.11195002488200985,
-            "Thursday": 0.0,
-            "Monday": 0.0,
-            "Saturday": 0.0
+            "Thursday": -0.013459737302058659,
+            "Monday": -0.03348829037787638,
+            "Saturday": 0.010008283809891758
           },
           "optimizer": {
             "status": "converged",
@@ -1018,9 +1018,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.22243291293045,
-            "log_loss": 0.6378290974641654,
-            "accuracy": 0.6494464944649446,
+            "brier": 0.22255834496475205,
+            "log_loss": 0.6381610925066912,
+            "accuracy": 0.6457564575645757,
             "ties": 1
           }
         }
@@ -1036,8 +1036,8 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.2640874271264433,
-            "log_loss": 0.7328539679197584,
+            "brier": 0.2644878016772341,
+            "log_loss": 0.7336892417895214,
             "accuracy": 0.5119047619047619,
             "ties": 1
           }
@@ -1052,8 +1052,8 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.22357054939107388,
-            "log_loss": 0.638311117704707,
+            "brier": 0.22374165738202031,
+            "log_loss": 0.6386859531380866,
             "accuracy": 0.6,
             "ties": 0
           }
@@ -1065,29 +1065,29 @@
         "blocks": 90,
         "direction": "Negative candidate-minus-baseline deltas favor candidate.",
         "brier": {
-          "delta": -0.0005465169262390268,
+          "delta": -0.0005179287658518422,
           "interval_95": [
-            -0.0015012787417729094,
-            0.0003497795101407196
+            -0.0014949544455978533,
+            0.00040178730918417134
           ]
         },
         "log_loss": {
-          "delta": -0.0007952346167557804,
+          "delta": -0.0007161175984427574,
           "interval_95": [
-            -0.0029314271507240855,
-            0.0012331262146460613
+            -0.00288459598159298,
+            0.0013605174863945196
           ]
         }
       },
       "winner_picks": {
         "decisive_games": 1355,
         "corrected_picks": 26,
-        "new_errors": 22,
-        "net_correct_picks": 4,
-        "accuracy_delta": 0.002952029520295203,
+        "new_errors": 24,
+        "net_correct_picks": 2,
+        "accuracy_delta": 0.0014760147601476014,
         "interval_95": [
-          -0.005809731299927378,
-          0.01168736303871439
+          -0.007262164124909223,
+          0.010263929618768328
         ],
         "method": "Paired season/week block bootstrap",
         "samples": 2000
@@ -1386,9 +1386,9 @@
     "Team efficiency": {
       "metrics": {
         "games": 1359,
-        "brier": 0.2240713800909264,
-        "log_loss": 0.6404135461037787,
-        "accuracy": 0.6243542435424354,
+        "brier": 0.22322416286190147,
+        "log_loss": 0.6387886202481544,
+        "accuracy": 0.6324723247232472,
         "ties": 4
       },
       "by_season": [
@@ -1401,18 +1401,18 @@
             2020
           ],
           "weights": {
-            "Offense: Net passing yards/dropback": 0.0,
-            "Offense: Passing first downs/dropback": 0.0,
-            "Offense: Sacks/dropback": 0.0,
-            "Offense: Rushing first downs/carry": 0.0,
-            "Offense: Turnovers/play": 0.0,
-            "Offense: EPA/play": 0.0,
-            "Defense: Net passing yards/dropback": 0.0,
-            "Defense: Passing first downs/dropback": 0.0,
-            "Defense: Sacks/dropback": 0.0,
-            "Defense: Rushing first downs/carry": 0.015116006745840306,
-            "Defense: Turnovers/play": 0.0019452789369933626,
-            "Defense: EPA/play": -0.048298998611923036
+            "Offense: Net passing yards/dropback": 0.015116006745840306,
+            "Offense: Passing first downs/dropback": 0.0019452789369933626,
+            "Offense: Sacks/dropback": -0.048298998611923036,
+            "Offense: Rushing first downs/carry": 0.10110059067901386,
+            "Offense: Turnovers/play": -0.04364078891728284,
+            "Offense: EPA/play": 0.06282185531808998,
+            "Defense: Net passing yards/dropback": 0.013888170180857856,
+            "Defense: Passing first downs/dropback": 0.003700379156468293,
+            "Defense: Sacks/dropback": -0.0124432664199532,
+            "Defense: Rushing first downs/carry": 0.02367391963068215,
+            "Defense: Turnovers/play": 0.051860044488360006,
+            "Defense: EPA/play": -0.03732633977016966
           },
           "optimizer": {
             "status": "converged",
@@ -1430,8 +1430,8 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.230867531214379,
-            "log_loss": 0.6562414561613616,
+            "brier": 0.23064347656611958,
+            "log_loss": 0.6563362065402059,
             "accuracy": 0.5940959409594095,
             "ties": 1
           }
@@ -1446,18 +1446,18 @@
             2021
           ],
           "weights": {
-            "Offense: Net passing yards/dropback": 0.0,
-            "Offense: Passing first downs/dropback": 0.0,
-            "Offense: Sacks/dropback": 0.0,
-            "Offense: Rushing first downs/carry": 0.0,
-            "Offense: Turnovers/play": 0.0,
-            "Offense: EPA/play": 0.0,
-            "Defense: Net passing yards/dropback": 0.0,
-            "Defense: Passing first downs/dropback": 0.0,
-            "Defense: Sacks/dropback": 0.0,
-            "Defense: Rushing first downs/carry": 0.02074286661732326,
-            "Defense: Turnovers/play": 0.008475019470393558,
-            "Defense: EPA/play": -0.061824473301330576
+            "Offense: Net passing yards/dropback": 0.02074286661732326,
+            "Offense: Passing first downs/dropback": 0.008475019470393558,
+            "Offense: Sacks/dropback": -0.061824473301330576,
+            "Offense: Rushing first downs/carry": 0.0801897783762638,
+            "Offense: Turnovers/play": -0.0029875593783512664,
+            "Offense: EPA/play": 0.05440414173846779,
+            "Defense: Net passing yards/dropback": 0.013543928146025569,
+            "Defense: Passing first downs/dropback": 0.008544908073009595,
+            "Defense: Sacks/dropback": -0.009255252663259973,
+            "Defense: Rushing first downs/carry": 0.012108991296617945,
+            "Defense: Turnovers/play": 0.04247578897403964,
+            "Defense: EPA/play": -0.05154057808792557
           },
           "optimizer": {
             "status": "converged",
@@ -1475,9 +1475,9 @@
           },
           "candidate": {
             "games": 271,
-            "brier": 0.22234187805524555,
-            "log_loss": 0.6374938668840704,
-            "accuracy": 0.6245353159851301,
+            "brier": 0.22063098754085922,
+            "log_loss": 0.6335602745558577,
+            "accuracy": 0.620817843866171,
             "ties": 2
           }
         },
@@ -1492,18 +1492,18 @@
             2022
           ],
           "weights": {
-            "Offense: Net passing yards/dropback": 0.0,
-            "Offense: Passing first downs/dropback": 0.0,
-            "Offense: Sacks/dropback": 0.0,
-            "Offense: Rushing first downs/carry": 0.0,
-            "Offense: Turnovers/play": 0.0,
-            "Offense: EPA/play": 0.0,
-            "Defense: Net passing yards/dropback": 0.0,
-            "Defense: Passing first downs/dropback": 0.0,
-            "Defense: Sacks/dropback": 0.0,
-            "Defense: Rushing first downs/carry": 0.013676722863863885,
-            "Defense: Turnovers/play": 0.028915478326045324,
-            "Defense: EPA/play": -0.09026335319790195
+            "Offense: Net passing yards/dropback": 0.013676722863863885,
+            "Offense: Passing first downs/dropback": 0.028915478326045324,
+            "Offense: Sacks/dropback": -0.09026335319790195,
+            "Offense: Rushing first downs/carry": 0.0790520482064444,
+            "Offense: Turnovers/play": 0.0017702241663185984,
+            "Offense: EPA/play": 0.06523447511965472,
+            "Defense: Net passing yards/dropback": -0.004836872242645568,
+            "Defense: Passing first downs/dropback": -0.011276390206182723,
+            "Defense: Sacks/dropback": -0.0017475554159321674,
+            "Defense: Rushing first downs/carry": 0.015382899851804707,
+            "Defense: Turnovers/play": 0.029566430036951696,
+            "Defense: EPA/play": -0.0644648212401522
           },
           "optimizer": {
             "status": "converged",
@@ -1521,9 +1521,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.23391473051372497,
-            "log_loss": 0.6608828529960336,
-            "accuracy": 0.5882352941176471,
+            "brier": 0.23386363772905816,
+            "log_loss": 0.6612762832992147,
+            "accuracy": 0.6066176470588235,
             "ties": 0
           }
         },
@@ -1538,18 +1538,18 @@
             2023
           ],
           "weights": {
-            "Offense: Net passing yards/dropback": 0.0,
-            "Offense: Passing first downs/dropback": 0.0,
-            "Offense: Sacks/dropback": 0.0,
-            "Offense: Rushing first downs/carry": 0.0,
-            "Offense: Turnovers/play": 0.0,
-            "Offense: EPA/play": 0.0,
-            "Defense: Net passing yards/dropback": 0.0,
-            "Defense: Passing first downs/dropback": 0.0,
-            "Defense: Sacks/dropback": 0.0,
-            "Defense: Rushing first downs/carry": 0.012061564984607155,
-            "Defense: Turnovers/play": 0.027200881955996525,
-            "Defense: EPA/play": -0.06150045516107858
+            "Offense: Net passing yards/dropback": 0.012061564984607155,
+            "Offense: Passing first downs/dropback": 0.027200881955996525,
+            "Offense: Sacks/dropback": -0.06150045516107858,
+            "Offense: Rushing first downs/carry": 0.07188008543930399,
+            "Offense: Turnovers/play": 0.006135049856357895,
+            "Offense: EPA/play": 0.06719227166221559,
+            "Defense: Net passing yards/dropback": -0.03919223984742974,
+            "Defense: Passing first downs/dropback": -0.027662896775769073,
+            "Defense: Sacks/dropback": 0.004243296071750602,
+            "Defense: Rushing first downs/carry": 0.03623482569697609,
+            "Defense: Turnovers/play": 0.004682213261592962,
+            "Defense: EPA/play": -0.054081070257821606
           },
           "optimizer": {
             "status": "converged",
@@ -1567,9 +1567,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.21014229358529865,
-            "log_loss": 0.6090102111452953,
-            "accuracy": 0.6764705882352942,
+            "brier": 0.20669943046257086,
+            "log_loss": 0.6020062086012627,
+            "accuracy": 0.6875,
             "ties": 0
           }
         },
@@ -1584,18 +1584,18 @@
             2024
           ],
           "weights": {
-            "Offense: Net passing yards/dropback": 0.0,
-            "Offense: Passing first downs/dropback": 0.0,
-            "Offense: Sacks/dropback": 0.0,
-            "Offense: Rushing first downs/carry": 0.0,
-            "Offense: Turnovers/play": 0.0,
-            "Offense: EPA/play": 0.0,
-            "Defense: Net passing yards/dropback": 0.0,
-            "Defense: Passing first downs/dropback": 0.0,
-            "Defense: Sacks/dropback": 0.0,
-            "Defense: Rushing first downs/carry": 0.02756037693344135,
-            "Defense: Turnovers/play": 0.04690436187349492,
-            "Defense: EPA/play": -0.06961259519985066
+            "Offense: Net passing yards/dropback": 0.02756037693344135,
+            "Offense: Passing first downs/dropback": 0.04690436187349492,
+            "Offense: Sacks/dropback": -0.06961259519985066,
+            "Offense: Rushing first downs/carry": 0.07229618075952791,
+            "Offense: Turnovers/play": 0.008549436618239672,
+            "Offense: EPA/play": 0.08118628418296042,
+            "Defense: Net passing yards/dropback": -0.03934051313478558,
+            "Defense: Passing first downs/dropback": -0.04856148712043659,
+            "Defense: Sacks/dropback": 0.007313875716515479,
+            "Defense: Rushing first downs/carry": 0.038873906535875316,
+            "Defense: Turnovers/play": 0.012380247754358267,
+            "Defense: EPA/play": -0.05315768410314099
           },
           "optimizer": {
             "status": "converged",
@@ -1613,9 +1613,9 @@
           },
           "candidate": {
             "games": 272,
-            "brier": 0.22308410862261724,
-            "log_loss": 0.638428609217349,
-            "accuracy": 0.6383763837638377,
+            "brier": 0.2242737482781014,
+            "log_loss": 0.6407449063850652,
+            "accuracy": 0.6531365313653137,
             "ties": 1
           }
         }
@@ -1631,9 +1631,9 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.2642209059815411,
-            "log_loss": 0.7329957071889387,
-            "accuracy": 0.5119047619047619,
+            "brier": 0.2675915246948806,
+            "log_loss": 0.740983655226489,
+            "accuracy": 0.5238095238095238,
             "ties": 1
           }
         },
@@ -1647,9 +1647,9 @@
           },
           "candidate": {
             "games": 85,
-            "brier": 0.22384584975630895,
-            "log_loss": 0.638631917240135,
-            "accuracy": 0.5882352941176471,
+            "brier": 0.22358467655532524,
+            "log_loss": 0.6380833185364694,
+            "accuracy": 0.6,
             "ties": 0
           }
         }
@@ -1660,29 +1660,29 @@
         "blocks": 90,
         "direction": "Negative candidate-minus-baseline deltas favor candidate.",
         "brier": {
-          "delta": -4.9214302567151116e-05,
+          "delta": -0.0008964315315920838,
           "interval_95": [
-            -0.0003510519554608213,
-            0.0002746544017653311
+            -0.0020534258950750633,
+            0.00032810653259310356
           ]
         },
         "log_loss": {
-          "delta": -0.00020654460333011066,
+          "delta": -0.0018314704589544198,
           "interval_95": [
-            -0.000925635572793207,
-            0.0005508649146127116
+            -0.004391388351062583,
+            0.0009258746194937547
           ]
         }
       },
       "winner_picks": {
         "decisive_games": 1355,
-        "corrected_picks": 5,
-        "new_errors": 8,
-        "net_correct_picks": -3,
-        "accuracy_delta": -0.002214022140221402,
+        "corrected_picks": 26,
+        "new_errors": 18,
+        "net_correct_picks": 8,
+        "accuracy_delta": 0.005904059040590406,
         "interval_95": [
-          -0.007352941176470588,
-          0.002962962962962963
+          -0.0043891733723482075,
+          0.016164584864070537
         ],
         "method": "Paired season/week block bootstrap",
         "samples": 2000

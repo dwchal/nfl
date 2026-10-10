@@ -793,12 +793,14 @@ worktrees:
 The weather-on rerun reproduces the committed
 [advanced evaluation](advanced-evaluation-2026.json) challenger Brier to seven
 decimal places (0.2212402) and sample weights to five, despite the newer provider
-file. The context-research A/B is neutral for five of seven groups (weights within
-1e-6, season Brier within 1e-8); the *kickoff time* and *team efficiency* groups
-move more (max weight Δ 3.2e-2 / 1.0e-1) because the old fixed-step routine had
-stalled far from its minimum and the stable solver converges it fully (all folds
-report `converged`). Those are research diagnostics, not deployed models, and the
-moves are recorded rather than tuned away. The Elo calibration path
+file. Review of the context-research rerun found a full-width versus selected-
+coefficient indexing error in the experiment adapter. The earlier attribution
+of changed subgroup results to optimizer convergence was incorrect. After fixing
+the adapter and regenerating the report on the same inputs, kickoff Brier is
+0.223550, day-of-week Brier is 0.223603, and team-efficiency Brier is 0.223224.
+The other four groups are unchanged; the combined model remains at 0.222625.
+These are corrected research diagnostics, not a newly validated model gain.
+The Elo calibration path
 (`model.fit_calibration`) is unchanged, so the regenerated
 [calibration audit](review-candidate-calibration-audit.json) reproduces the existing
 walk-forward audit on the current schedule file.
@@ -814,3 +816,11 @@ fallback path was not exercised on real data (it is covered by fixture tests); a
 reported results remain retrospective. Optimizer settings were not tuned on
 held-out outcomes. This record predates items 2–9, whose data-quality fixes
 (unknown ≠ zero, explicit forecast cutoffs) may change these fits when they land.
+
+**Follow-up review fixes.** The context experiment now extracts selected
+coefficients from the solver's full-width vector before prediction and reporting.
+An integration test checks every feature group, including nonconsecutive indices.
+If the advanced model's final fit fails, it now returns an unavailable model,
+zero corrections, no advanced replay probabilities, and an explicit Elo fallback
+message. A regression test verifies that the dashboard disables advanced
+predictions while preserving the historical comparison diagnostics.
