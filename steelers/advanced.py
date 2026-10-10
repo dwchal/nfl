@@ -13,11 +13,11 @@ from .coverage import sufficient_history, training_coverage
 from .evaluation import paired_uncertainty
 from .forecast import kickoff_utc
 from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
-                      corrected, fit_diagnostic, logit, replay)
-from .model import backtest, metrics, select_model, team_key
+                      corrected, fit_correction, fit_diagnostic, replay)
+from .model import historical_offsets, metrics, select_model, team_key
 from .pbp import PBPStore
 
-VERSION = "advanced-v3"
+VERSION = "advanced-v4"
 LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offense", "defense") for label in pbp.LABELS) + travel.LABELS + (
     "Wind × passing reliance", "Rain × passing reliance", "Cold × passing reliance",
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")
@@ -197,16 +197,12 @@ def evaluate_advanced(games, season, config, bundle, data):
     years = list(range(season - 6, season))
     regular = [r for r in rows if r["kind"] == "REG" and r["season"] in years]
     # Every training/evaluation Elo offset is itself selected using older years.
-    for year in years:
-        previous_config, _ = select_model(games, year)
-        previous = {p["id"]: p["probability"] for p in backtest(games, [year], previous_config)}
-        for row in regular:
-            if row["season"] == year:
-                row.update(probability=previous[row["id"]], offset=logit(previous[row["id"]]))
+    elo_configs = historical_offsets(regular, games, years, selector=select_model)
     coverage = training_coverage(regular, years, require_pbp=True)
     report = {"version": VERSION, "status": "unavailable", "promoted": False, "coverage": coverage,
               "reason": "Prepare six prior seasons with at least 200 regular games and 95% weekly team/QB and play-by-play coverage.", "sources": data.get("sources", []),
-              "evidence_digest": data.get("evidence", Evidence()).digest, "optimizer": None}
+              "evidence_digest": data.get("evidence", Evidence()).digest, "optimizer": None,
+              "elo_configs": elo_configs}
     if not sufficient_history(coverage, require_pbp=True):
         return AdvancedModel((0.,) * len(LABELS), state, report), {}
     predictions, baseline, folds = [], [], []
@@ -217,10 +213,7 @@ def evaluate_advanced(games, season, config, bundle, data):
     ablation_optimizers = {name: [] for name in groups}
 
     def converged_weights(rows, indices):
-        weights, optimizer = fit_diagnostic(rows, indices, penalty=.1)
-        if not optimizer["converged"]:
-            weights = (0.,) * len(weights)
-        return weights, optimizer
+        return fit_correction(rows, indices, penalty=.1, fitter=fit_diagnostic)
 
     for year in years[3:]:
         train = [r for r in regular if r["season"] < year]

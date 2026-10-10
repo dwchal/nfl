@@ -1,0 +1,19 @@
+{
+  "version": "chronological-v1",
+  "history_start": 2016,
+  "evaluation_seasons": [2021, 2022, 2023, 2024, 2025],
+  "cutoff_policy": "kickoff_previous_day",
+  "inner_seasons": 2,
+  "min_training_seasons": 3,
+  "max_training_seasons": 6,
+  "minimum_games": 200,
+  "minimum_coverage": 0.95,
+  "bootstrap_samples": 2000,
+  "seed": 42,
+  "gate": "both_probability_scores",
+  "candidates": [
+    {"id": "elo", "family": "elo"},
+    {"id": "matchup", "family": "matchup", "penalty": 0.03},
+    {"id": "advanced", "family": "advanced", "penalty": 0.1}
+  ]
+}

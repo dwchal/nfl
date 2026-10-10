@@ -8,12 +8,12 @@ Corrections are regularized logistic regression, implemented in the stdlib.
 import math
 from dataclasses import dataclass
 
-from .model import BASE_RATING, metrics, replay_season, rest_difference, team_key, update_ratings
+from .model import BASE_RATING, historical_offsets, metrics, replay_season, rest_difference, team_key, update_ratings
 from .optimization import fit_logistic_offset
 from .features import feature_key
 from .coverage import sufficient_history, training_coverage
 
-VERSION = "matchup-v3"
+VERSION = "matchup-v4"
 LABELS = ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense", "Rest advantage", "Quarterback change")
 GROUPS = {"Rest": (4,), "Efficiency + rest": (0, 1, 2, 3, 4), "Efficiency + rest + QB": tuple(range(6))}
 
@@ -175,6 +175,14 @@ def fit(rows, indices, penalty=.03):
     return weights
 
 
+def fit_correction(rows, indices, penalty=.03, fitter=None):
+    """Fit without evaluation/reporting; failed fits always return Elo weights."""
+    weights, optimizer = (fitter or fit_diagnostic)(rows, indices, penalty=penalty)
+    if not optimizer["converged"]:
+        weights = (0.,) * len(weights)
+    return weights, optimizer
+
+
 def corrected(probability, features, weights):
     return sigmoid(logit(probability) + sum(w * max(-4, min(4, v)) for w, v in zip(weights, features)))
 
@@ -192,6 +200,7 @@ class MatchupModel:
 def evaluate(games, season, config, bundle):
     rows, state, _ = replay(games, season, config, bundle)
     years = list(range(season - 6, season))
+    elo_configs = historical_offsets(rows, games, years)
     tuning, tests = years[:3], years[3:]
     regular = [r for r in rows if r["kind"] == "REG"]
     train = [r for r in regular if r["season"] in tuning]
@@ -200,7 +209,7 @@ def evaluate(games, season, config, bundle):
     report = {"status": "unavailable", "version": VERSION, "coverage": coverage,
               "tuning_seasons": tuning, "test_seasons": tests,
               "reason": "Six prior seasons with at least 95% team and QB statistics coverage are required.", "promoted": False,
-              "optimizer": None}
+              "optimizer": None, "elo_configs": elo_configs}
     if not sufficient_history(coverage):
         return MatchupModel((0.,) * 6, state, report), {}
     early = [r for r in train if r["season"] < tuning[-1]]
@@ -211,17 +220,13 @@ def evaluate(games, season, config, bundle):
 
     candidates = []
     for name, indices in GROUPS.items():
-        weights, optimizer = fit_diagnostic(early, indices)
-        if not optimizer["converged"]:
-            weights = (0.,) * len(weights)
+        weights, optimizer = fit_correction(early, indices)
         candidates.append((metrics(forecasts(validation, weights)), name, indices, optimizer))
     # Fixed full challenger. Smaller feature families are diagnostics, rather
     # than repeated searches against the later comparison seasons.
     name = "Efficiency + rest + QB"
     indices = GROUPS[name]
-    weights, optimizer = fit_diagnostic(train, indices)
-    if not optimizer["converged"]:
-        weights = (0.,) * len(weights)
+    weights, optimizer = fit_correction(train, indices)
     predictions = forecasts(test, weights)
     baseline, challenger = metrics(test), metrics(predictions)
     promoted = (optimizer["converged"] and challenger["brier"] < baseline["brier"]
@@ -230,7 +235,7 @@ def evaluate(games, season, config, bundle):
               if not optimizer["converged"]
               else "Matchup corrections improved both probability scores and are enabled by default." if promoted
               else "Matchup corrections did not improve both scores. Elo remains the default; the matchup model is available for comparison.")
-    report.update(status="evaluated", name=name, weights=dict(zip(LABELS, weights)), baseline=baseline,
+    report.update(status="evaluated" if optimizer["converged"] else "unavailable", name=name, weights=dict(zip(LABELS, weights)), baseline=baseline,
                   challenger_metrics=challenger, promoted=promoted, optimizer=optimizer,
                   brier_improvement_pct=100 * (baseline["brier"] - challenger["brier"]) / baseline["brier"],
                   by_team={team: {"baseline": metrics(test, team), "challenger": metrics(predictions, team)} for team in ("PIT", "MIN")},
@@ -241,7 +246,8 @@ def evaluate(games, season, config, bundle):
                   reason=reason)
     # Completed-game estimates use the frozen pre-target coefficients, then the
     # feature state recorded before each game. Never current-season fitting.
-    probabilities = {r["id"]: corrected(r["probability"], r["features"], weights) for r in rows if r["season"] == season}
+    probabilities = ({r["id"]: corrected(r["probability"], r["features"], weights) for r in rows if r["season"] == season}
+                     if optimizer["converged"] else {})
     return MatchupModel(weights, state, report), probabilities
 
 

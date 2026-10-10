@@ -31,6 +31,33 @@ class ModelConfig:
 BASELINE = ModelConfig()
 
 
+def chronological_forecasts(games, years, selector=None):
+    """Per-year Elo forecasts and exact settings, selected strictly beforehand.
+
+    The selector never receives the forecast year's outcomes. Replay can still
+    update ratings with earlier completed games within that year.
+    """
+    selector = selector or select_model
+    forecasts, configs = {}, {}
+    for year in sorted(set(years)):
+        config, _ = selector([g for g in games if g.season < year], year)
+        configs[str(year)] = asdict(config)
+        for row in replay_season([g for g in games if g.season <= year], year, config)[2]:
+            forecasts[row["id"]] = {**row, "elo_config": asdict(config)}
+    return forecasts, configs
+
+
+def historical_offsets(rows, games, years, selector=None):
+    """Replace historical correction offsets with their own prior-year policy."""
+    forecasts, configs = chronological_forecasts(games, years, selector)
+    for row in rows:
+        if row["id"] in forecasts:
+            forecast = forecasts[row["id"]]
+            p = forecast["probability"]
+            row.update(probability=p, offset=math.log(p / (1 - p)), elo_config=forecast["elo_config"])
+    return configs
+
+
 def team_key(team):
     return ALIASES.get(team, team)
 

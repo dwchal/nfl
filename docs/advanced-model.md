@@ -2,6 +2,11 @@
 
 Choose **Advanced matchup · experimental** in the dashboard to use the four additions below. Processing uses Python's standard library; downloaded data and pregame evidence remain local.
 
+For a common comparison of Elo, QB matchup and advanced, see the
+[nested chronological audit](chronological-evaluation.md). It uses identical
+game sets and prior-season candidate selection. Earlier snapshots below retain
+their original evaluation protocols.
+
 ## Prepare and run
 
 For 2026, download eight warmup/history seasons plus the current season:

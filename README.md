@@ -83,7 +83,7 @@ The challenger uses regularized logistic regression with Elo as its probability 
 
 For a selected season, coefficients train on the first three of the six preceding seasons and stay frozen throughout the later comparison and selected season. A fixed full-feature challenger uses L2 penalty 0.03. Smaller rest-only and efficiency-plus-rest models train on the first two older seasons and validate on the third as feature diagnostics; those checks do not choose the final challenger. Each historical forecast sees only earlier games' statistics, with a one-day publication-lag approximation; same-day statistics are excluded. Schedule QB starter columns are never used, because they can be populated after the game. Historical weekly statistics can contain later provider corrections, so this remains a retrospective development comparison, not an untouched live audit. At least 200 games per prior season and 95% team/QB statistics coverage are required. Coefficients are shared across all teams; Steelers/Vikings results are also shown separately.
 
-The [original 2026 matchup evaluation](docs/matchup-evaluation-2026.json), before confidence/rest calibration, compares 816 regular-season games from 2023–2025 after training corrections on 2020–2022. Winner-pick accuracy rose **64.4% → 65.3%**, but Brier error worsened **0.2219 → 0.2223**, and log loss worsened **0.6356 → 0.6363**. Both team subsets also had worse Brier error (Pittsburgh 0.2666 → 0.2747; Minnesota 0.2262 → 0.2295). Consequently the challenger is **experimental and not the default**. Refitting its corrections against calibrated Elo also fails the two-score gate; the current result is included in the calibrated snapshot. The snapshot includes input hashes and feature coverage. These seasons were already examined during earlier development, which makes the forward archive especially important.
+The [original 2026 matchup evaluation](docs/matchup-evaluation-2026.json), before confidence/rest calibration, compares 816 regular-season games from 2023–2025 after training corrections on 2020–2022. Winner-pick accuracy rose **64.4% → 65.3%**, but Brier error worsened **0.2219 → 0.2223**, and log loss worsened **0.6356 → 0.6363**. Both team subsets also had worse Brier error (Pittsburgh 0.2666 → 0.2747; Minnesota 0.2262 → 0.2295). Consequently the challenger is **experimental and not the default**. The later calibrated snapshot also failed the two-score gate. Historical QB training/comparison offsets now use each year's strictly prior Elo settings; the [updated application report](docs/chronological-matchup-2026.json) still fails that gate. These snapshots include input hashes and feature coverage. These seasons were already examined during earlier development, which makes the forward archive especially important.
 
 QB controls offer players listed as quarterbacks in the selected season's roster feed. The default assumption is the previous game's leading passer, **not a confirmed starter**; roster changes can invalidate it. New/lightly used quarterbacks shrink toward league average rather than receiving an invented backup penalty. What-if selections affect the scenario estimate only; they do not alter the schedule, outlook, or saved forecasts. Contributions add from Elo to the default matchup estimate in a fixed order and describe model arithmetic rather than causal effects. The experimental season outlook holds current efficiency/QB corrections fixed while simulated wins/losses update Elo; it does not simulate future injuries, QB changes, or future efficiency statistics.
 
@@ -108,6 +108,31 @@ python3 -m steelers.evaluation --data .cache/games.csv --start 2018 --end 2025 #
 python3 -m unittest discover -s tests -v
 ```
 
+## Common chronological evaluation
+
+The [shared evaluation protocol and results](docs/chronological-evaluation.md)
+compare Elo, QB matchup, and advanced on the same 1,359 games from 2021–2025.
+For each outer season, candidates fit only earlier seasons and selection uses
+the last two earlier complete seasons. The runner records per-game forecasts,
+exact settings, coverage fallbacks, and source hashes in the
+[full report](docs/chronological-evaluation.json).
+
+```sh
+python3 -m steelers.experiments --data .cache/games.csv \
+  --features .cache/features --advanced .cache/advanced \
+  --start 2021 --end 2025 --config docs/experiments/chronological.json \
+  --output docs/chronological-evaluation.json
+```
+
+This command reads local snapshots without downloads or evidence/archive writes.
+Advanced Brier is 0.222061 versus Elo's 0.224121, but its probability-score
+uncertainty interval includes no improvement. Previously explored years remain
+a retrospective development audit. The runner does not promote a production
+model. The application also now uses prior-only Elo offsets for historical QB
+training; its [updated 2026 development report](docs/chronological-matchup-2026.json)
+still fails the two-score gate, so Elo remains the default. Older snapshots are
+preserved and use their original protocols.
+
 Only Python’s standard library is used. The frontend is plain HTML/CSS/JavaScript with local SVG charts, without a build step, CDN, or tracking scripts. Python 3.10+ also works on Windows and Linux via `python app.py` or `python3 app.py`.
 
 ## Repository layout
@@ -117,4 +142,4 @@ For a code review and nine prioritized improvement plans, see the
 It includes specific code findings, ordered implementation steps, test cases,
 data requirements, and evaluation gates for each proposal.
 
-`app.py` serves the local interface; `steelers/data.py` downloads and validates schedules; `steelers/model.py` tunes/calibrates Elo; `steelers/evaluation.py` audits the full selection policy; `steelers/features.py` loads weekly statistics; `steelers/matchup.py` fits/evaluates the QB challenger; `steelers/advanced.py` evaluates the advanced model; `steelers/pbp.py`, `steelers/evidence.py`, and `steelers/travel.py` prepare its inputs; `steelers/weather.py` loads weather forecasts; `steelers/forecast.py` archives pre-kickoff predictions; `steelers/analysis.py` calculates statistics and projections; `static/` contains the interface; `tests/` verifies calculations, future-result isolation, offline fallback, and HTTP endpoints. The original R/Shiny/Quarto project is retained under `legacy/r/` for reference and is not needed to run the Python app.
+`app.py` serves the local interface; `steelers/data.py` downloads and validates schedules; `steelers/model.py` tunes/calibrates Elo; `steelers/evaluation.py` audits Elo calibration; `steelers/experiments.py` runs shared nested chronological model comparisons; `steelers/features.py` loads weekly statistics; `steelers/matchup.py` fits/evaluates the QB challenger; `steelers/advanced.py` evaluates the advanced model; `steelers/pbp.py`, `steelers/evidence.py`, and `steelers/travel.py` prepare its inputs; `steelers/weather.py` loads weather forecasts; `steelers/forecast.py` archives pre-kickoff predictions; `steelers/analysis.py` calculates statistics and projections; `static/` contains the interface; `tests/` verifies calculations, future-result isolation, offline fallback, and HTTP endpoints. The original R/Shiny/Quarto project is retained under `legacy/r/` for reference and is not needed to run the Python app.

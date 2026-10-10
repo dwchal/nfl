@@ -3,9 +3,10 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Items 1 and 2 have been implemented as recorded below in the
+documentation only. Items 1–3 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
-[input-quality record](#item-2-implementation-record); items 3–9 remain proposed.
+[input-quality record](#item-2-implementation-record) and
+[chronological evaluation record](#item-3-implementation-record); items 4–9 remain proposed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -872,8 +873,8 @@ this guide before the rerun; the reports include the counts and settings.
 [input-quality-advanced-2026.json](input-quality-advanced-2026.json).
 Both use the same locally cached raw sources as the prior reports, with schedule
 SHA-256 `a06ca5f608332ba4936d5f13f8868d92bf423b9d8b88b3c2dba293162575cfac`.
-These use the existing retrospective evaluation policies; item 3's common
-chronological evaluator has not been implemented.
+These snapshots use the earlier retrospective evaluation policies. Item 3 below
+records the later common chronological evaluation.
 
 | Candidate on 2023–2025 | Prior Brier | New Brier | Prior log loss | New log loss |
 | --- | ---: | ---: | ---: | ---: |
@@ -897,5 +898,55 @@ metadata, unknown/legacy reports, and per-feature support/variation gates.
 JavaScript syntax and Git whitespace checks pass. No network downloads or
 forecast-archive writes were needed for these reruns.
 
-The next planned priority is item 3: evaluate all models with one chronological
-selection policy and comparable per-game outputs.
+## Item 3 implementation record
+
+`steelers/experiments.py` now implements the common local-only experiment runner.
+Its [configuration](experiments/chronological.json) fixes seasons, candidate order,
+penalties, cutoffs, coverage rules, inner folds, fit windows, gate and seed.
+The [protocol and reproduction instructions](chronological-evaluation.md)
+describe the complete selection path. The [report](chronological-evaluation.json)
+includes comparable per-game predictions, fitted parameters, coverage/fallback
+metadata, and hashes for raw inputs, logical evidence rows, configuration, and
+Python implementation files. JSON rejects non-finite values and output is
+deterministic for fixed snapshots and code.
+
+Each historical Elo configuration is selected with strictly prior-year games.
+QB and advanced application entry points now share that helper and the pure
+correction fitting helper. Their version is `v4`; failed QB fits now explicitly
+disable the correction model. Existing report fields and earlier snapshots are
+preserved. The [updated QB application report](chronological-matchup-2026.json)
+still fails its development gate; the new runner does not change deployment.
+
+For each outer year the runner selects on the last two earlier complete seasons,
+fits at most six earlier complete source-eligible seasons (minimum three), and
+requires both pooled inner probability scores to improve. Candidate predictions
+always include fallback games. Weekly history starts in 2016 and PBP in 2018;
+source-eligible training years are recorded separately for each model. Feature
+warmup is fixed per forecast year, so extending a run does not alter earlier
+inputs. Optional support gates only inspect training observations.
+
+On 1,359 games from 2021–2025, Brier/log loss are 0.224121/0.640620 for Elo,
+0.222987/0.638071 for QB, 0.222061/0.636680 for advanced, and
+0.223150/0.638683 for the inner-selected policy. All fits converge. Advanced
+corrects 69 winner picks and introduces 42 errors; the selected policy has a net
+15 additional correct picks. Both advanced and selected-policy probability-score
+intervals include zero. Pittsburgh probability scores worsen, and both
+correction models worsen 2025 probability scores. No complete availability
+records exist. These are already-explored development years, not an untouched
+holdout. Full year/team/input subsets and paired intervals are in the report.
+
+New tests mutate outer scores and weekly/QB/PBP data through the entire selection
+path, verify frozen settings and earlier predictions, check inner/outer fit-year
+boundaries and candidate game alignment, and exercise missing/invalid sources,
+failed optimizers, ties, partial seasons, stable range extension, deterministic
+JSON, and read-only SQLite loading. Application regression tests verify that
+target Elo settings cannot alter historical QB training and that failed fits
+remain unavailable.
+
+**Validation.** All 113 tests pass on Python 3.14.7, including the HTTP integration
+tests. JavaScript syntax and Git whitespace checks pass. Two independent local
+CLI runs produce byte-identical 1,359-game reports; their implementation hashes
+match the committed Python sources. No downloads or forecast captures are needed.
+
+The next planned priority is item 4: collect comparable prospective forecasts at
+explicit prediction times across the league.
