@@ -12,7 +12,7 @@ python3 -m steelers.prepare --start 2018 --end 2026 --weather-history
 python3 app.py
 ```
 
-Preparation can take several minutes and reports counts/warnings for each source. The dashboard loads compact aggregates afterward. **Refresh data** updates the prepared current season and depth charts; rerun preparation with `--refresh` to update older aggregates. `--offline` uses saved data. Without sufficient history the advanced selector falls back to Elo and explains the missing coverage.
+Preparation can take several minutes and reports counts/warnings for each source. The dashboard loads compact aggregates afterward. **Refresh data** updates the prepared current season and depth charts; rerun preparation with `--refresh` to update older aggregates. `--offline` uses saved data. Each prior training season needs at least 200 regular-season games and 95% weekly team/QB and play-by-play coverage. Without sufficient history, or if the final fit fails to converge, the advanced selector falls back to Elo and explains the reason.
 
 ## 1. Starting quarterbacks and availability
 
@@ -20,7 +20,7 @@ The model distinguishes **User-confirmed**, **Projected**, and **Previous passer
 
 To record a confirmed starter, select the QB in the matchup controls, enter the source, and use the confirmation button. The app records the submission time and source in an append-only local archive. It rejects completed games and post-kickoff submissions. Merely selecting a what-if QB does not confirm a starter or alter archived forecasts. This is a user-supplied confirmation, not an automated verification of the source.
 
-Availability features count unavailable skill-position players, offensive linemen, defenders, and questionable/doubtful players. Coefficients stay zero until at least 100 games in earlier training seasons have timestamped availability records. The current historical training set has **zero** such games: non-QB injury effects are implemented but not yet fitted. Historical report files are never backdated into pregame evidence. QB exclusion can still operate on a current report.
+Availability features count unavailable skill-position players, offensive linemen, defenders, and questionable/doubtful players. Coefficients stay zero until at least 100 games in earlier training seasons have timestamped, complete availability reports for both teams. Each coefficient also needs 20 zero and 20 nonzero eligible observations. The current historical training set has **zero** complete games: non-QB injury effects are implemented but not yet fitted. A missing report or empty player list does not establish that a team is healthy. The current row-based feed does not certify completeness, so its records remain partial/unknown. Historical report files are never backdated into pregame evidence. QB exclusion can still operate on a current report.
 
 Opening/refreshing the advanced dashboard captures available injury reports for upcoming league games within seven days and weather for the selected next game. There is no background collector. Depth and injury evidence expire after seven days. nflverse's [data schedule](https://nflreadr.nflverse.com/articles/nflverse_data_schedule.html) and [depth-chart dictionary](https://nflreadr.nflverse.com/articles/dictionary_depth_charts.html) describe the timestamped depth-chart feed used from 2025 onward.
 
@@ -36,7 +36,7 @@ Wind, precipitation, and cold interact with the difference in the teams' earlier
 
 Historical weather uses Open-Meteo's [Previous Runs API](https://open-meteo.com/en/docs/previous-runs-api), specifically forecasts from 24 hours before each valid hour, rather than observed game weather. The three-hour window receives a conservative availability time based on its last constituent forecast. Provider retrieval time is retained separately. Current forecasts are saved when retrieved.
 
-Weather coefficients require 100 earlier training games with eligible forecasts. Preparation saved 423 historical forecasts; 357 qualify for the final 2026 training window. Availability, roof, and season filters explain the difference. Weather has **not** demonstrated an additional accuracy gain in this evaluation.
+Weather coefficients require 100 earlier training games with eligible forecasts, plus at least 20 zero and 20 nonzero observations for each interaction. Preparation saved 423 historical forecasts; 357 qualify for the final 2026 training window. Availability, roof, and season filters explain the difference. Weather has **not** demonstrated an additional accuracy gain in this evaluation.
 
 ## 4. Travel and body-clock kickoff
 
@@ -45,6 +45,14 @@ Features cover distance from each team's home base, kickoff before noon or after
 These are schedule-based approximations. Actual flight itineraries, arrival dates, and acclimatization are unknown. Home advantage and rest remain in the underlying model; travel adds information about the particular trip.
 
 ## Historical evaluation
+
+The original snapshot below predates stricter input validation. The current
+[input-quality evaluation](input-quality-advanced-2026.json) uses `advanced-v3`
+with weekly/QB coverage checks, explicit pregame history, and per-feature
+variation requirements. Its 816-game Brier is 0.221243 and log loss is 0.634410;
+the default remains unchanged. See the
+[implementation record](model-improvement-plan.md#item-2-implementation-record)
+for the comparison and data limitations.
 
 The [complete 2026 snapshot](advanced-evaluation-2026.json) compares identical games using annual chronological fitting. Each evaluated year's Elo settings and advanced coefficients use earlier seasons only. Corrections train on 2020–2022 for 2023, expand through 2023 for 2024, and expand through 2024 for 2025. Current 2026 coefficients train on 2020–2025. The fixed L2 penalty is 0.1. Each prior season must contain at least 200 regular-season games and 95% play-by-play coverage.
 

@@ -11,9 +11,28 @@ from urllib.parse import urlencode
 from urllib.request import urlopen
 
 from .forecast import kickoff_utc
+from .features import feature_key
 from .model import team_key
 from .travel import VENUES
 from .weather import summarize
+
+AVAILABILITY_VERSION = "availability-v2"
+
+
+def availability_complete(record, home, away):
+    """Legacy/partial reports cannot establish a complete absence comparison."""
+    if not record or record.get("version") != AVAILABILITY_VERSION:
+        return False
+    reports = record.get("team_reports", {})
+    for team in (team_key(home), team_key(away)):
+        report = reports.get(team, {})
+        status = report.get("status")
+        has_players = any(team_key(p["team"]) == team for p in record.get("players", []))
+        if report.get("complete") is not True or status not in {"reported", "explicitly_empty"}:
+            return False
+        if (status == "reported") != has_players:
+            return False
+    return True
 
 
 def timestamp(value):
@@ -99,11 +118,26 @@ class EvidenceStore:
         if retrieved and timestamp(retrieved) <= now and now - timestamp(retrieved) <= timedelta(days=7):
             injuries = [{"team": team_key(r["team"]), "id": r.get("gsis_id", ""), "name": r.get("full_name", ""),
                          "position": r.get("position", ""), "status": r.get("report_status", "")}
-                        for r in bundle.get("injuries", []) if r["team"] in {game.home, game.away}
+                        for r in bundle.get("injuries", []) if team_key(r["team"]) in {team_key(game.home), team_key(game.away)}
                         and int(r["week"]) == game.week and r.get("game_type", "REG") == game.kind]
             # Snapshot time is when this app could use the record; provider dates
             # are retained separately and cannot backdate later-acquired evidence.
-            payload = {"players": injuries, "source": metadata}
+            reports = {}
+            for raw_team in (game.home, game.away):
+                team = team_key(raw_team)
+                descriptor = bundle.get("injury_reports", {}).get(feature_key(game.season, game.week, game.kind, team), {})
+                has_players = any(p["team"] == team for p in injuries)
+                status = "reported" if has_players else "unknown"
+                # The current player-row feed does not attest team-report
+                # completeness. Only an explicit provider descriptor can do so.
+                complete = descriptor.get("complete") is True and (
+                    descriptor.get("status") == "reported" and has_players or
+                    descriptor.get("status") == "explicitly_empty" and not has_players)
+                if complete:
+                    status = descriptor["status"]
+                reports[team] = {"status": status, "complete": complete}
+            payload = {"version": AVAILABILITY_VERSION, "players": injuries,
+                       "team_reports": reports, "source": metadata}
             previous = self.snapshot().latest("availability", game.id, now)
             if previous is None or {k: v for k, v in previous.items() if k != "available_at"} != payload:
                 self.save("availability", game.id, now.isoformat(), payload)

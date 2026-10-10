@@ -17,7 +17,8 @@ from steelers.analysis import build_dashboard
 from steelers.advanced import (AdvancedModel, AdvancedState, AdvancedStore, LABELS,
                               WEATHER_START, enabled_indices, evaluate_advanced)
 from steelers.data import ScheduleStore
-from steelers.evidence import Evidence, EvidenceStore
+from steelers.evidence import AVAILABILITY_VERSION, Evidence, EvidenceStore, availability_complete
+from steelers.features import feature_key
 from steelers.forecast import kickoff_utc
 from steelers.matchup import corrected, explain, fit, replay
 from steelers.model import BASELINE
@@ -65,6 +66,31 @@ class PlayByPlayTests(unittest.TestCase):
 
 
 class EvidenceTests(unittest.TestCase):
+    def test_capture_distinguishes_reported_unknown_and_explicitly_empty(self):
+        game = fixture(home_score=None, away_score=None)
+        now = kickoff_utc(game) - timedelta(hours=2)
+        bundle = bundle_for([])
+        bundle["sources"] = [{"file": "injuries_2026.csv", "downloaded_at": (now - timedelta(hours=1)).isoformat(),
+                              "sha256": "source-hash"}]
+        bundle["injuries"] = [{"team": "PIT", "week": "1", "game_type": "REG", "gsis_id": "out",
+                               "position": "QB", "report_status": "Out"}]
+        with tempfile.TemporaryDirectory() as directory:
+            store = EvidenceStore(Path(directory) / "evidence.sqlite3")
+            store.capture(game, bundle, now=now)
+            record = store.snapshot().latest("availability", game.id, now + timedelta(seconds=1))
+            self.assertEqual(record["team_reports"]["PIT"], {"status": "reported", "complete": False})
+            self.assertEqual(record["team_reports"]["MIN"], {"status": "unknown", "complete": False})
+            self.assertFalse(availability_complete(record, "PIT", "MIN"))
+            self.assertEqual(record["source"]["sha256"], "source-hash")
+            bundle["injury_reports"] = {
+                feature_key(2026, 1, "REG", "PIT"): {"status": "reported", "complete": True},
+                feature_key(2026, 1, "REG", "MIN"): {"status": "explicitly_empty", "complete": True}}
+            store.capture(game, bundle, now=now + timedelta(minutes=1))
+            record = store.snapshot().latest("availability", game.id, now + timedelta(minutes=2))
+            self.assertTrue(availability_complete(record, "PIT", "MIN"))
+            self.assertEqual(record["team_reports"]["MIN"]["status"], "explicitly_empty")
+            self.assertEqual(len(store.snapshot().indexed[("availability", game.id)]), 2)
+
     def test_confirmations_are_pregame_immutable_and_override_projections(self):
         game = fixture(home_score=None, away_score=None)
         before = kickoff_utc(game) - timedelta(hours=2)
@@ -125,6 +151,73 @@ class EvidenceTests(unittest.TestCase):
 
 
 class AdvancedFeaturesTests(unittest.TestCase):
+    def test_pbp_presence_does_not_replace_weekly_or_qb_coverage(self):
+        games = [replace(fixture(f"{year}-{i}", week=i + 1, year=year),
+                         day=fixture(year=year).day + timedelta(days=i))
+                 for year in range(2020, 2026) for i in range(200)]
+        plays = {g.id: {team: [[0., 30.]] * 8 for team in (g.home, g.away)} for g in games}
+        for missing in ("team", "player"):
+            bundle = bundle_for(games)
+            bundle[missing] = {}
+            with self.subTest(missing=missing), \
+                 patch("steelers.advanced.select_model", return_value=(BASELINE, {})), \
+                 patch("steelers.advanced.fit_diagnostic") as fit_model:
+                model, probabilities = evaluate_advanced(games, 2026, BASELINE, bundle, {"plays": plays})
+                self.assertEqual(model.report["status"], "unavailable")
+                self.assertEqual(model.report["coverage"]["2025"]["pbp"], 200)
+                self.assertEqual(model.report["coverage"]["2025"]["covered"], 0)
+                self.assertFalse(any(model.weights))
+                self.assertEqual(probabilities, {})
+                fit_model.assert_not_called()
+
+    def test_pregame_pbp_coverage_describes_observed_history(self):
+        games = [fixture("a"), fixture("b", week=2), fixture("c", week=3, day=8)]
+        plays = {g.id: {t: [[10., 30.]] * 8 for t in (g.home, g.away)} for g in games}
+        rows, _, _ = replay(games, 2026, CONFIG, bundle_for(games), AdvancedState(plays))
+        self.assertTrue(all(r["pbp_covered"] for r in rows))
+        self.assertEqual(rows[0]["input_coverage"]["teams"]["PIT"]["pbp"]["games"], 0)
+        self.assertEqual(rows[1]["input_coverage"]["teams"]["PIT"]["pbp"]["games"], 0)
+        later = rows[2]["input_coverage"]["teams"]["PIT"]["pbp"]
+        self.assertEqual(later["games"], 2)
+        self.assertEqual(later["last_game"], "b")
+        self.assertGreater(later["effective_plays"][0], 0)
+
+    def test_unknown_or_legacy_availability_cannot_enable_or_apply_effects(self):
+        game = fixture()
+        cutoff = kickoff_utc(game)
+        legacy = {"available_at": (cutoff - timedelta(hours=1)).isoformat(),
+                  "players": [{"team": "PIT", "id": "out", "position": "WR", "status": "Out"}]}
+        state = AdvancedState(evidence=Evidence({("availability", game.id): [legacy]}), now=cutoff)
+        self.assertEqual(state.features(game)[-4:], [0.] * 4)
+        self.assertTrue(state.coverage(game)["missing"]["availability"])
+        rows = [{"id": str(i), "features": [1.] * len(LABELS)} for i in range(100)]
+        contexts = {r["id"]: {"weather": None, "availability": {"players": []},
+                              "availability_complete": False} for r in rows}
+        indices, support = enabled_indices(rows, contexts)
+        self.assertEqual(support["availability_games"], 0)
+        self.assertFalse(support["availability_enabled"])
+        self.assertTrue(all(i < len(LABELS) - 4 for i in indices))
+        complete = {**legacy, "version": AVAILABILITY_VERSION, "team_reports": {
+            "PIT": {"status": "reported", "complete": True},
+            "MIN": {"status": "explicitly_empty", "complete": True}}}
+        state.evidence = Evidence({("availability", game.id): [complete]})
+        self.assertNotEqual(state.features(game)[-4:], [0.] * 4)
+        self.assertFalse(state.coverage(game)["missing"]["availability"])
+
+    def test_availability_effect_requires_complete_varied_training_evidence(self):
+        rows = [{"id": str(i), "features": [0.] * (len(LABELS) - 4) + [float(i < 50), 0., 1., 0.]}
+                for i in range(100)]
+        contexts = {r["id"]: {"weather": None, "availability_complete": True} for r in rows}
+        indices, support = enabled_indices(rows, contexts)
+        self.assertTrue(support["availability_enabled"])
+        self.assertIn(len(LABELS) - 4, indices)
+        self.assertNotIn(len(LABELS) - 2, indices)
+        for row in rows[:50]:
+            contexts[row["id"]]["availability_complete"] = False
+        indices, support = enabled_indices(rows, contexts)
+        self.assertEqual(support["availability_games"], 50)
+        self.assertFalse(support["availability_enabled"])
+
     def test_failed_final_fit_disables_advanced_forecasts_in_dashboard(self):
         games = [replace(fixture(f"{year}-{i}", week=i + 1, year=year),
                          day=fixture(year=year).day + timedelta(days=i))
@@ -212,11 +305,16 @@ class AdvancedFeaturesTests(unittest.TestCase):
         self.assertEqual(changed, again)
 
     def test_optional_groups_need_historical_support_and_contributions_sum(self):
-        rows = [{"id": str(i)} for i in range(100)]
+        rows = [{"id": str(i), "features": [0.] * WEATHER_START + [float(i < 50), 0., 1.] + [0.] * 4} for i in range(100)]
         contexts = {r["id"]: {"weather": {}, "availability": None} for r in rows}
         indices, support = enabled_indices(rows, contexts)
         self.assertTrue(support["weather_enabled"])
         self.assertFalse(support["availability_enabled"])
+        self.assertIn(WEATHER_START, indices)
+        self.assertNotIn(WEATHER_START + 1, indices)
+        self.assertNotIn(WEATHER_START + 2, indices)
+        self.assertEqual(support["variation"][LABELS[WEATHER_START]]["nonzero"], 50)
+        self.assertFalse(enabled_indices(rows[:99], contexts)[1]["weather_enabled"])
         self.assertNotIn(len(LABELS) - 1, indices)
         model = AdvancedModel((.01,) * len(LABELS), AdvancedState(), {"status": "evaluated"})
         self.assertAlmostEqual(.6 + sum(c["change"] for c in explain(model, fixture(), .6, "PIT")), model.probability(fixture(), .6))

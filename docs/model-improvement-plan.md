@@ -3,9 +3,9 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Item 1 has been implemented as recorded in the
-[implementation record](#item-1-implementation-record); all later items remain
-proposed and have not been fitted or deployed.
+documentation only. Items 1 and 2 have been implemented as recorded below in the
+[optimizer record](#item-1-implementation-record) and
+[input-quality record](#item-2-implementation-record); items 3–9 remain proposed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -812,7 +812,8 @@ walk-forward audit on the current schedule file.
 [review-candidate-context.json](review-candidate-context.json).
 
 **Limits.** No fit in any regenerated report failed to converge, so the Elo
-fallback path was not exercised on real data (it is covered by fixture tests); all
+fallback path was not exercised on real data. The follow-up regression test below
+covers the advanced final-fit fallback through the dashboard. All
 reported results remain retrospective. Optimizer settings were not tuned on
 held-out outcomes. This record predates items 2–9, whose data-quality fixes
 (unknown ≠ zero, explicit forecast cutoffs) may change these fits when they land.
@@ -824,3 +825,77 @@ If the advanced model's final fit fails, it now returns an unavailable model,
 zero corrections, no advanced replay probabilities, and an explicit Elo fallback
 message. A regression test verifies that the dashboard disables advanced
 predictions while preserving the historical comparison diagnostics.
+
+## Item 2 implementation record
+
+Implemented 2026-10-10 after the two item 1 review fixes. Model versions are now
+`matchup-v3` and `advanced-v3`; the weekly parsing/digest schema is `weekly-v2`
+and new availability payloads use `availability-v2`.
+
+**Numeric data and identities.** Blank/NA numeric statistics now remain missing
+or reject the file. Missing EPA is accepted as a neutral total only when the
+associated opportunity count is explicitly zero. Missing, negative, fractional,
+or nonfinite counts are rejected. All 22 locally cached weekly team/player
+files (2016–2026) pass the stricter parser, including 283 legitimate missing
+QB passing-EPA entries with zero dropbacks. A failed refresh preserves the last
+valid snapshot. Weekly keys are normalized with a shared `feature_key`; duplicate
+teams after alias normalization and duplicate player IDs within a team week are
+rejected. Source metadata and the bundle digest include the parsing schema so
+raw caches are revalidated under the new rules without requiring redownloads.
+
+**Training versus pregame coverage.** New `steelers/coverage.py` gives QB and
+advanced models the same per-season 200-game/95% weekly team/QB coverage gate.
+Advanced additionally requires 95% PBP coverage. Dataset presence and usable
+pregame history are reported separately. Replay rows record each team's previous
+eligible observation, observed game count, decayed opportunity counts, assumed
+QB history, and advanced PBP history. Metadata is copied before the game is
+observed; same-day/own-game/future-data mutation tests check that isolation.
+The matchup lab exposes missing-history priors and the date of earlier team data.
+
+**Optional evidence.** Availability snapshots preserve a per-team status
+(`reported`, `explicitly_empty`, or `unknown`), a completeness flag, and source
+metadata. A fresh file or an empty player list cannot establish a healthy team.
+The current row-based injury feed does not attest complete team reports; future
+providers can supply explicit per-team descriptors through the internal
+`injury_reports` mapping keyed by `feature_key`. Until then, listed absences can
+still exclude a projected QB, but no non-QB availability effect is applied.
+Legacy availability payloads remain in SQLite and cannot enable new coefficients.
+
+Each optional coefficient needs 100 eligible complete game records, with at least
+20 zero and 20 nonzero feature observations. Unknown records are excluded from
+those counts and contribute a neutral effect with explicit missing metadata.
+No learned missingness predictors were added. The thresholds were specified in
+this guide before the rerun; the reports include the counts and settings.
+
+**Evaluation.** New reports preserve the prior optimizer snapshots:
+[input-quality-matchup-2026.json](input-quality-matchup-2026.json) and
+[input-quality-advanced-2026.json](input-quality-advanced-2026.json).
+Both use the same locally cached raw sources as the prior reports, with schedule
+SHA-256 `a06ca5f608332ba4936d5f13f8868d92bf423b9d8b88b3c2dba293162575cfac`.
+These use the existing retrospective evaluation policies; item 3's common
+chronological evaluator has not been implemented.
+
+| Candidate on 2023–2025 | Prior Brier | New Brier | Prior log loss | New log loss |
+| --- | ---: | ---: | ---: | ---: |
+| QB matchup | 0.222054864 | 0.222066885 | 0.635423576 | 0.635446683 |
+| Advanced | 0.221240188 | 0.221243138 | 0.634400623 | 0.634410002 |
+
+These small increases are reported, not treated as predictive gains. Canonical
+weekly keys change earlier feature history for relocated teams. In the 2025
+advanced fold, the new variation gate also disables rain; final 2026 training
+has sufficient variation for all three weather coefficients. Earlier seasons
+have 252/256 covered weekly games in 2020 and 268/272 in 2021, both above 95%.
+Usable pregame QB history is separately missing in three 2025 advanced rows.
+Final training has 357 eligible weather games and zero complete availability
+games. All reported fits converge. The QB candidate still fails promotion; the
+advanced model remains an explicit experimental option, with no default change.
+
+**Validation.** 96 tests pass on Python 3.14.7, including the two review
+regressions, stricter numeric/identity parsing, valid-cache preservation,
+95% coverage boundaries, PBP-present/weekly-absent fallback, pregame sample
+metadata, unknown/legacy reports, and per-feature support/variation gates.
+JavaScript syntax and Git whitespace checks pass. No network downloads or
+forecast-archive writes were needed for these reruns.
+
+The next planned priority is item 3: evaluate all models with one chronological
+selection policy and comparable per-game outputs.

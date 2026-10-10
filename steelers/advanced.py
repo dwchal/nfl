@@ -2,12 +2,14 @@
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from . import pbp, travel
-from .evidence import Evidence, EvidenceStore, timestamp
+from .evidence import Evidence, EvidenceStore, availability_complete, timestamp
+from .coverage import sufficient_history, training_coverage
 from .evaluation import paired_uncertainty
 from .forecast import kickoff_utc
 from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
@@ -15,7 +17,7 @@ from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
 from .model import backtest, metrics, select_model, team_key
 from .pbp import PBPStore
 
-VERSION = "advanced-v2"
+VERSION = "advanced-v3"
 LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offense", "defense") for label in pbp.LABELS) + travel.LABELS + (
     "Wind × passing reliance", "Rain × passing reliance", "Cold × passing reliance",
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")
@@ -27,6 +29,7 @@ class Situations:
     def __init__(self):
         self.teams, self.styles = {}, {}
         self.league = [[0., 0.] for _ in pbp.LABELS]
+        self.observations = {}
 
     def strength(self, team):
         values = self.teams.get(team, [[0., 0.] for _ in range(16)])
@@ -51,6 +54,7 @@ class Situations:
                 adjustment = previous[opponent][j + 8 if i < 8 else j]
                 values.append([.9 * old[i][0] + total - count * (means[j] + adjustment), .9 * old[i][1] + count])
             self.teams[team] = values
+            FeatureState.record_observation(self.observations, team, game)
             passes, plays = self.styles.get(team, (0., 0.))
             self.styles[team] = (passes * .9 + offense[7][0], plays * .9 + offense[7][1])
         for values in (own, other):
@@ -85,12 +89,30 @@ class AdvancedState(FeatureState):
             weather = None
         # Historical roof-open/closed decisions cannot establish pregame exposure.
         known_roof = self.venue_roofs.get(game.stadium_id or game.stadium)
-        if weather and (weather.get("roof") != "outdoors" or known_roof != "outdoors"):
+        weather_valid = weather is not None and all(
+            isinstance(weather.get(k), (int, float)) and math.isfinite(weather[k])
+            for k in ("wind_mph", "precipitation_inches", "temperature_f"))
+        if weather is not None and (not weather_valid or weather.get("roof") != "outdoors" or known_roof != "outdoors"):
             weather = None
         availability = self.evidence.latest("availability", game.id, cutoff, timedelta(days=7))
         return {"quarterbacks": qbs, "weather": weather, "availability": availability,
+                "availability_complete": availability_complete(availability, game.home, game.away),
                 "travel": travel.context(game, self.away_streaks),
                 "pbp_available": all(team_key(t) in self.situations.teams for t in (game.home, game.away))}
+
+    def coverage(self, game, home_qb=None, away_qb=None):
+        context = self.contexts.get(game.id) or self.context(game)
+        qbs = context["quarterbacks"]
+        coverage = super().coverage(game, qbs[game.home]["id"] if home_qb is None else home_qb,
+                                    qbs[game.away]["id"] if away_qb is None else away_qb)
+        for team, values in coverage["teams"].items():
+            observed = self.situations.observations.get(team, {"games": 0, "last_game": None, "last_date": None})
+            samples = self.situations.teams.get(team, [[0., 0.] for _ in range(16)])
+            values["pbp"] = {**observed, "effective_plays": [v[1] for v in samples],
+                             "neutral_prior": observed["games"] == 0}
+        coverage["missing"] = {"weather": context["weather"] is None,
+                               "availability": not context["availability_complete"]}
+        return coverage
 
     def features(self, game, home_qb=None, away_qb=None):
         context = self.context(game)
@@ -108,7 +130,8 @@ class AdvancedState(FeatureState):
                        weather["precipitation_inches"] / .25 * reliance,
                        max(0, 40 - weather["temperature_f"]) / 30 * reliance]
         missing = {home: [0.] * 4, away: [0.] * 4}
-        for player in (context["availability"] or {}).get("players", []):
+        players = context["availability"].get("players", []) if context["availability_complete"] else []
+        for player in players:
             if player["team"] not in missing:
                 continue
             status, position = player["status"].lower(), player["position"]
@@ -148,15 +171,24 @@ class AdvancedModel(MatchupModel):
 def enabled_indices(rows, contexts):
     # Optional signals need enough timestamped historical coverage to estimate
     # coefficients; absence of a snapshot is never evidence of healthy players.
-    weather = sum(contexts[r["id"]]["weather"] is not None for r in rows)
-    availability = sum(contexts[r["id"]]["availability"] is not None for r in rows)
+    weather_rows = [r for r in rows if contexts[r["id"]]["weather"] is not None]
+    availability_rows = [r for r in rows if contexts[r["id"]].get("availability_complete", False)]
+    weather, availability = len(weather_rows), len(availability_rows)
     indices = list(range(WEATHER_START))
-    if weather >= 100:
-        indices.extend(range(WEATHER_START, AVAILABILITY_START))
-    if availability >= 100:
-        indices.extend(range(AVAILABILITY_START, len(LABELS)))
+    variation = {}
+    for eligible, group in ((weather_rows, range(WEATHER_START, AVAILABILITY_START)),
+                            (availability_rows, range(AVAILABILITY_START, len(LABELS)))):
+        for i in group:
+            nonzero = sum(abs(r["features"][i]) > 1e-12 for r in eligible)
+            zeros = len(eligible) - nonzero
+            enabled = len(eligible) >= 100 and nonzero >= 20 and zeros >= 20
+            variation[LABELS[i]] = {"games": len(eligible), "nonzero": nonzero, "zero": zeros, "enabled": enabled}
+            if enabled:
+                indices.append(i)
     return tuple(indices), {"weather_games": weather, "availability_games": availability,
-                            "weather_enabled": weather >= 100, "availability_enabled": availability >= 100}
+                            "weather_enabled": any(i in indices for i in range(WEATHER_START, AVAILABILITY_START)),
+                            "availability_enabled": any(i in indices for i in range(AVAILABILITY_START, len(LABELS))),
+                            "variation": variation, "minimum_games": 100, "minimum_zero_and_nonzero": 20}
 
 
 def evaluate_advanced(games, season, config, bundle, data):
@@ -171,12 +203,11 @@ def evaluate_advanced(games, season, config, bundle, data):
         for row in regular:
             if row["season"] == year:
                 row.update(probability=previous[row["id"]], offset=logit(previous[row["id"]]))
-    coverage = {str(year): {"games": sum(r["season"] == year for r in regular),
-                           "pbp": sum(r["season"] == year and all(team_key(t) in data.get("plays", {}).get(r["id"], {}) for t in (r["home"], r["away"])) for r in regular)} for year in years}
+    coverage = training_coverage(regular, years, require_pbp=True)
     report = {"version": VERSION, "status": "unavailable", "promoted": False, "coverage": coverage,
-              "reason": "Prepare six prior seasons with at least 95% play-by-play coverage.", "sources": data.get("sources", []),
+              "reason": "Prepare six prior seasons with at least 200 regular games and 95% weekly team/QB and play-by-play coverage.", "sources": data.get("sources", []),
               "evidence_digest": data.get("evidence", Evidence()).digest, "optimizer": None}
-    if any(c["games"] < 200 or c["pbp"] / c["games"] < .95 for c in coverage.values()):
+    if not sufficient_history(coverage, require_pbp=True):
         return AdvancedModel((0.,) * len(LABELS), state, report), {}
     predictions, baseline, folds = [], [], []
     groups = {"QB + weekly efficiency": tuple(range(6)),
@@ -212,7 +243,7 @@ def evaluate_advanced(games, season, config, bundle, data):
                  and c["accuracy"] > b["accuracy"])
     reason = ("The advanced correction fit did not converge; forecasts use Elo without advanced corrections."
               if not optimizer["converged"] else
-              "Annual chronological evaluation; explicit experimental selection only. Availability/weather coefficients stay zero until at least 100 earlier snapshots are available. Confirmed lineups require timestamped evidence.")
+              "Annual chronological evaluation; explicit experimental selection only. Weather/availability effects need 100 complete earlier snapshots and at least 20 zero and 20 nonzero observations per feature. Unknown reports contribute no availability effect. Confirmed lineups require timestamped evidence.")
     report.update(status="evaluated" if optimizer["converged"] else "unavailable",
                   name="Advanced matchup", baseline=b, challenger_metrics=c,
                   tuning_seasons=years, test_seasons=years[3:], by_season=folds, support=support,

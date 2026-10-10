@@ -54,6 +54,13 @@ For the regular-season outlook, each simulation plays all remaining league games
 
 ## Advanced matchup model
 
+Current models distinguish missing statistics from measured zero, normalize
+historical team aliases, and report the earlier history available to each
+forecast. Advanced training requires weekly team/QB coverage as well as
+play-by-play coverage. Optional weather and injury effects require sufficient
+complete evidence and variation; incomplete injury reports apply no non-QB
+adjustment. See the [input-quality implementation and evaluation](docs/model-improvement-plan.md#item-2-implementation-record).
+
 The **Advanced matchup · experimental** selector implements timestamped QB projections/user confirmations and availability capture, situational play-by-play efficiency, forecast-weather interactions with passing style, and travel/body-clock kickoff effects. Prepare its data once:
 
 ```sh

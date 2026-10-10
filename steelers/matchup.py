@@ -10,8 +10,10 @@ from dataclasses import dataclass
 
 from .model import BASE_RATING, metrics, replay_season, rest_difference, team_key, update_ratings
 from .optimization import fit_logistic_offset
+from .features import feature_key
+from .coverage import sufficient_history, training_coverage
 
-VERSION = "matchup-v2"
+VERSION = "matchup-v3"
 LABELS = ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense", "Rest advantage", "Quarterback change")
 GROUPS = {"Rest": (4,), "Efficiency + rest": (0, 1, 2, 3, 4), "Efficiency + rest + QB": tuple(range(6))}
 
@@ -30,6 +32,7 @@ class FeatureState:
         self.qbs = {}
         self.last_qb = {}
         self.league = [0., 0., 0., 0.]
+        self.observations, self.qb_observations = {}, {}
 
     def means(self):
         return self.league[0] / max(1, self.league[1]), self.league[2] / max(1, self.league[3])
@@ -41,6 +44,26 @@ class FeatureState:
     def qb_quality(self, identifier):
         epa, plays = self.qbs.get(identifier, (0., 0.))
         return epa / (plays + 200), plays
+
+    def coverage(self, game, home_qb=None, away_qb=None):
+        teams = {}
+        for raw_team, selected_qb in ((game.home, home_qb), (game.away, away_qb)):
+            team = team_key(raw_team)
+            identifier = selected_qb if selected_qb is not None else self.last_qb.get(team, ("", ""))[0]
+            values = self.teams.get(team, [0.] * 8)
+            weekly = {**self.observations.get(team, {"games": 0, "last_game": None, "last_date": None}),
+                      "effective_plays": dict(zip(("pass_offense", "rush_offense", "pass_defense", "rush_defense"), values[1::2]))}
+            qb = {**self.qb_observations.get(identifier, {"games": 0, "last_game": None, "last_date": None}),
+                  "id": identifier, "dropbacks": self.qb_quality(identifier)[1]}
+            weekly["neutral_prior"] = weekly["games"] == 0
+            qb["neutral_prior"] = qb["dropbacks"] == 0
+            teams[team] = {"weekly": weekly, "quarterback": qb}
+        return {"teams": teams}
+
+    @staticmethod
+    def record_observation(records, key, game):
+        records[key] = {"games": records.get(key, {}).get("games", 0) + 1,
+                        "last_game": game.id, "last_date": game.day.isoformat()}
 
     def features(self, game, home_qb=None, away_qb=None):
         home, away = team_key(game.home), team_key(game.away)
@@ -61,8 +84,7 @@ class FeatureState:
         self.qbs = {q: (epa * .8, count * .8) for q, (epa, count) in self.qbs.items()}
 
     def observe(self, game, bundle):
-        kind = "REG" if game.kind == "REG" else "POST"
-        keys = [(game.season, game.week, kind, t) for t in (game.home, game.away)]
+        keys = [feature_key(game.season, game.week, game.kind, t) for t in (game.home, game.away)]
         rows = [bundle["team"].get(key) for key in keys]
         if any(row is None for row in rows):
             return
@@ -77,10 +99,13 @@ class FeatureState:
                             other.passing_epa - other.dropbacks * (mean_pass + opp[0]), other.dropbacks,
                             other.rushing_epa - other.carries * (mean_rush + opp[1]), other.carries)
             self.teams[team] = [v * .9 + new for v, new in zip(values, observations)]
+            self.record_observation(self.observations, team, game)
             quarterbacks = bundle["player"].get(keys[index], [])
             for qb in quarterbacks:
                 epa, plays = self.qbs.get(qb.id, (0., 0.))
                 self.qbs[qb.id] = (epa * .95 + qb.epa - mean_pass * qb.dropbacks, plays * .95 + qb.dropbacks)
+                if qb.dropbacks > 0:
+                    self.record_observation(self.qb_observations, qb.id, game)
             candidates = [q for q in quarterbacks if q.dropbacks > 0]
             if candidates:
                 starter = max(candidates, key=lambda q: q.dropbacks)
@@ -117,11 +142,14 @@ def replay(games, season, config, bundle, state=None):
         if not game.completed:
             continue
         probability = elo_predictions[game.id]
-        key = (game.season, game.week, "REG" if game.kind == "REG" else "POST")
+        features = state.features(game)
         result = float(game.home_score > game.away_score) if game.home_score != game.away_score else .5
         rows.append({"id": game.id, "season": game.season, "week": game.week, "kind": game.kind, "home": home, "away": away,
-                     "probability": probability, "offset": logit(probability), "features": state.features(game),
-                     "result": result, "covered": all((*key, t) in bundle["team"] and (*key, t) in bundle["player"] for t in (game.home, game.away))})
+                     "probability": probability, "offset": logit(probability), "features": features,
+                     "input_coverage": state.coverage(game),
+                     "result": result, "covered": all(feature_key(game.season, game.week, game.kind, t) in bundle[kind]
+                                                         for t in (game.home, game.away) for kind in ("team", "player")),
+                     "pbp_covered": all(team_key(t) in getattr(state, "plays", {}).get(game.id, {}) for t in (game.home, game.away))})
         update_ratings(ratings, home, away, result, game.neutral, config, game.home_score - game.away_score)
         pending.append(game)
     # Future forecasts use all completed games' available statistics.
@@ -168,13 +196,12 @@ def evaluate(games, season, config, bundle):
     regular = [r for r in rows if r["kind"] == "REG"]
     train = [r for r in regular if r["season"] in tuning]
     test = [r for r in regular if r["season"] in tests]
-    coverage = {str(year): {"games": len([r for r in regular if r["season"] == year]),
-                           "covered": sum(r["covered"] for r in regular if r["season"] == year)} for year in years}
+    coverage = training_coverage(regular, years)
     report = {"status": "unavailable", "version": VERSION, "coverage": coverage,
               "tuning_seasons": tuning, "test_seasons": tests,
               "reason": "Six prior seasons with at least 95% team and QB statistics coverage are required.", "promoted": False,
               "optimizer": None}
-    if any(c["games"] < 200 or c["covered"] / c["games"] < .95 for c in coverage.values()):
+    if not sufficient_history(coverage):
         return MatchupModel((0.,) * 6, state, report), {}
     early = [r for r in train if r["season"] < tuning[-1]]
     validation = [r for r in train if r["season"] == tuning[-1]]
@@ -250,6 +277,7 @@ def next_context(model, game, elo_probability, team, bundle, selected_qb="", opp
     injuries = [r for r in bundle["injuries"] if r["team"] in {team, opponent}
                 and int(r["week"]) == game.week and r.get("game_type", "REG") == game.kind]
     return {"game_id": game.id, "team_qbs": options, "opponent_qbs": opposing,
+            "input_coverage": model.state.coverage(game, home_qb or None, away_qb or None),
             "features": dict(zip(getattr(model, "labels", LABELS), model.state.features(game))), "elo_home_probability": elo_probability,
             "selected_qb": selected_qb, "opponent_qb": opponent_qb,
             "probability": convert(probability), "default_probability": convert(regular_probability),

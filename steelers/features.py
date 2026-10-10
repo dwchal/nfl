@@ -12,17 +12,38 @@ from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
 
+from .model import team_key
+
 RELEASES = "https://github.com/nflverse/nflverse-data/releases/download"
+VERSION = "weekly-v2"
 
 
-def number(row, key):
-    value = row.get(key, "")
-    if value in {"", "NA", "nan", None}:
-        return 0.0
+def feature_key(season, week, kind, team):
+    return (season, week, "REG" if kind == "REG" else "POST", team_key(team))
+
+
+def number(row, key, allow_missing=False):
+    value = row.get(key)
+    if value is None or str(value).strip().lower() in {"", "na", "nan", "null", "none"}:
+        if allow_missing:
+            return None
+        raise ValueError(f"Missing player/team statistic: {key}")
     result = float(value)
     if not math.isfinite(result):
         raise ValueError("Non-finite player/team statistic")
     return result
+
+
+def opportunities(row, key):
+    value = number(row, key)
+    if value < 0 or value != int(value):
+        raise ValueError(f"Invalid opportunity count: {key}")
+    return value
+
+
+def epa_total(row, key, count):
+    value = number(row, key, allow_missing=count == 0)
+    return 0.0 if value is None else value
 
 
 @dataclass(frozen=True)
@@ -54,25 +75,31 @@ def parse_feature_csv(content, kind, year):
     if not required.issubset(reader.fieldnames or []):
         raise ValueError(f"Missing {kind} columns")
     result = {} if kind in {"team", "player"} else []
+    seen_players = set()
     for row in reader:
         if int(row["season"]) != year:
             raise ValueError("Wrong season in feature download")
         if kind in {"team", "player"}:
-            key = (year, int(row["week"]), row["season_type"], row["team"])
             if row["season_type"] not in {"REG", "POST"}:
                 continue
+            key = feature_key(year, int(row["week"]), row["season_type"], row["team"])
             if kind == "team":
                 if key in result:
                     raise ValueError("Duplicate weekly team statistics")
-                result[key] = TeamWeek(number(row, "passing_epa"), number(row, "attempts") + number(row, "sacks_suffered"),
-                                       number(row, "rushing_epa"), number(row, "carries"))
-                if result[key].dropbacks < 0 or result[key].carries < 0:
-                    raise ValueError("Negative play count")
+                dropbacks = opportunities(row, "attempts") + opportunities(row, "sacks_suffered")
+                carries = opportunities(row, "carries")
+                result[key] = TeamWeek(epa_total(row, "passing_epa", dropbacks), dropbacks,
+                                       epa_total(row, "rushing_epa", carries), carries)
             elif row["position"] == "QB":
+                dropbacks = opportunities(row, "attempts") + opportunities(row, "sacks_suffered")
                 qb = QBWeek(row["player_id"], row["player_display_name"],
-                            number(row, "passing_epa"), number(row, "attempts") + number(row, "sacks_suffered"))
-                if qb.dropbacks < 0 or not qb.id:
+                            epa_total(row, "passing_epa", dropbacks), dropbacks)
+                if not qb.id or qb.id.strip().lower() in {"na", "nan"}:
                     raise ValueError("Invalid quarterback statistics")
+                identifier = (*key, qb.id)
+                if identifier in seen_players:
+                    raise ValueError("Duplicate weekly quarterback statistics")
+                seen_players.add(identifier)
                 result.setdefault(key, []).append(qb)
         else:
             result.append(row)
@@ -125,9 +152,9 @@ class FeatureStore:
         if self.offline:
             warning = "Offline snapshot" if cached else "No saved data"
         if not cached:
-            return kind, year, None, None, {"file": filename, "warning": warning or "No data"}
+            return kind, year, None, None, {"file": filename, "warning": warning or "No data", "schema": VERSION}
         return kind, year, cached[0], cached[1], {
-            "file": filename, "warning": warning,
+            "file": filename, "warning": warning, "schema": VERSION,
             "downloaded_at": datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(),
             "sha256": hashlib.sha256(cached[1]).hexdigest()}
 
@@ -135,8 +162,8 @@ class FeatureStore:
         # Two warmup years plus the six-year development comparison, and target.
         tasks = [(kind, year) for year in range(max(1999, season - 8), season + 1) for kind in ("team", "player")]
         tasks += [(kind, season) for kind in ("rosters", "injuries")]
-        bundle = {"team": {}, "player": {}, "rosters": [], "injuries": [], "sources": []}
-        digest = hashlib.sha256()
+        bundle = {"team": {}, "player": {}, "rosters": [], "injuries": [], "sources": [], "schema": VERSION}
+        digest = hashlib.sha256(VERSION.encode())
         with ThreadPoolExecutor(max_workers=4) as pool:
             results = pool.map(lambda task: self._file(*task, refresh), tasks)
             for kind, year, parsed, raw, metadata in results:
