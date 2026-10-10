@@ -9,8 +9,9 @@ import math
 from dataclasses import dataclass
 
 from .model import BASE_RATING, metrics, replay_season, rest_difference, team_key, update_ratings
+from .optimization import fit_logistic_offset
 
-VERSION = "matchup-v1"
+VERSION = "matchup-v2"
 LABELS = ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense", "Rest advantage", "Quarterback change")
 GROUPS = {"Rest": (4,), "Efficiency + rest": (0, 1, 2, 3, 4), "Efficiency + rest + QB": tuple(range(6))}
 
@@ -129,24 +130,21 @@ def replay(games, season, config, bundle, state=None):
     return rows, state, ratings
 
 
+def fit_diagnostic(rows, indices, penalty=.03):
+    """Stable fit returning full-width weights plus optimizer diagnostics.
+
+    Unselected coefficients stay exactly zero. A fit that fails to converge is
+    reported, never silently deployed: callers fall back to zero weights (Elo).
+    """
+    width = len(rows[0]["features"]) if rows else max(6, max((int(i) for i in indices), default=-1) + 1)
+    weights, status = fit_logistic_offset(rows, indices, penalty, width=width)
+    return tuple(weights), status
+
+
 def fit(rows, indices, penalty=.03):
-    width = len(rows[0]["features"]) if rows else max(6, max(indices, default=-1) + 1)
-    weights = [0.] * width
-    for _ in range(300):
-        gradient = [0.] * width
-        for row in rows:
-            x = [max(-4, min(4, v)) for v in row["features"]]
-            error = sigmoid(row["offset"] + sum(weights[i] * x[i] for i in indices)) - row["result"]
-            for i in indices:
-                gradient[i] += error * x[i]
-        change = 0.
-        for i in indices:
-            step = .5 * (gradient[i] / max(1, len(rows)) + penalty * weights[i])
-            weights[i] -= step
-            change = max(change, abs(step))
-        if change < 1e-7:
-            break
-    return tuple(weights)
+    """Public wrapper for existing callers; drops the optimizer diagnostics."""
+    weights, _ = fit_diagnostic(rows, indices, penalty)
+    return weights
 
 
 def corrected(probability, features, weights):
@@ -174,7 +172,8 @@ def evaluate(games, season, config, bundle):
                            "covered": sum(r["covered"] for r in regular if r["season"] == year)} for year in years}
     report = {"status": "unavailable", "version": VERSION, "coverage": coverage,
               "tuning_seasons": tuning, "test_seasons": tests,
-              "reason": "Six prior seasons with at least 95% team and QB statistics coverage are required.", "promoted": False}
+              "reason": "Six prior seasons with at least 95% team and QB statistics coverage are required.", "promoted": False,
+              "optimizer": None}
     if any(c["games"] < 200 or c["covered"] / c["games"] < .95 for c in coverage.values()):
         return MatchupModel((0.,) * 6, state, report), {}
     early = [r for r in train if r["season"] < tuning[-1]]
@@ -185,24 +184,34 @@ def evaluate(games, season, config, bundle):
 
     candidates = []
     for name, indices in GROUPS.items():
-        weights = fit(early, indices)
-        candidates.append((metrics(forecasts(validation, weights)), name, indices))
+        weights, optimizer = fit_diagnostic(early, indices)
+        if not optimizer["converged"]:
+            weights = (0.,) * len(weights)
+        candidates.append((metrics(forecasts(validation, weights)), name, indices, optimizer))
     # Fixed full challenger. Smaller feature families are diagnostics, rather
     # than repeated searches against the later comparison seasons.
     name = "Efficiency + rest + QB"
     indices = GROUPS[name]
-    weights = fit(train, indices)
+    weights, optimizer = fit_diagnostic(train, indices)
+    if not optimizer["converged"]:
+        weights = (0.,) * len(weights)
     predictions = forecasts(test, weights)
     baseline, challenger = metrics(test), metrics(predictions)
-    promoted = challenger["brier"] < baseline["brier"] and challenger["log_loss"] < baseline["log_loss"]
+    promoted = (optimizer["converged"] and challenger["brier"] < baseline["brier"]
+                and challenger["log_loss"] < baseline["log_loss"])
+    reason = ("The correction fit did not converge, so no matchup corrections are applied; Elo remains the default."
+              if not optimizer["converged"]
+              else "Matchup corrections improved both probability scores and are enabled by default." if promoted
+              else "Matchup corrections did not improve both scores. Elo remains the default; the matchup model is available for comparison.")
     report.update(status="evaluated", name=name, weights=dict(zip(LABELS, weights)), baseline=baseline,
-                  challenger_metrics=challenger, promoted=promoted,
+                  challenger_metrics=challenger, promoted=promoted, optimizer=optimizer,
                   brier_improvement_pct=100 * (baseline["brier"] - challenger["brier"]) / baseline["brier"],
                   by_team={team: {"baseline": metrics(test, team), "challenger": metrics(predictions, team)} for team in ("PIT", "MIN")},
                   by_season=[{"season": year, "baseline": metrics([r for r in test if r["season"] == year]),
                               "challenger": metrics([r for r in predictions if r["season"] == year])} for year in tests],
-                  ablations=[{"name": group, "validation": score} for score, group, _ in candidates],
-                  reason="Matchup corrections improved both probability scores and are enabled by default." if promoted else "Matchup corrections did not improve both scores. Elo remains the default; the matchup model is available for comparison.")
+                  ablations=[{"name": group, "validation": score, "optimizer": optimizer}
+                              for score, group, _, optimizer in candidates],
+                  reason=reason)
     # Completed-game estimates use the frozen pre-target coefficients, then the
     # feature state recorded before each game. Never current-season fitting.
     probabilities = {r["id"]: corrected(r["probability"], r["features"], weights) for r in rows if r["season"] == season}

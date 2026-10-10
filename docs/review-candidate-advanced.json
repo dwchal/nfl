@@ -1,0 +1,876 @@
+{
+  "season": 2026,
+  "data": {
+    "source": "Saved nflverse data",
+    "source_url": "https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv",
+    "warning": "Offline mode: using saved data.",
+    "sha256": "a06ca5f608332ba4936d5f13f8868d92bf423b9d8b88b3c2dba293162575cfac",
+    "downloaded_at": "2026-10-10T16:12:58.394508+00:00"
+  },
+  "status": "evaluated",
+  "active": {
+    "name": "Calibrated margin-aware Elo",
+    "k_factor": 20.0,
+    "home_advantage": 35.0,
+    "carryover": 0.6666666666666666,
+    "use_margin": true,
+    "probability_scale": 0.9133338279320191,
+    "rest_coefficient": 0.10806757387433766
+  },
+  "challenger": {
+    "name": "Margin-aware Elo",
+    "k_factor": 20.0,
+    "home_advantage": 35.0,
+    "carryover": 0.6666666666666666,
+    "use_margin": true,
+    "probability_scale": 1.0,
+    "rest_coefficient": 0.0
+  },
+  "promoted": true,
+  "tuning_seasons": [
+    2020,
+    2021,
+    2022
+  ],
+  "test_seasons": [
+    2023,
+    2024,
+    2025
+  ],
+  "candidates": 28,
+  "tuning": {
+    "games": 799,
+    "brier": 0.22179825131591552,
+    "log_loss": 0.638332639739115,
+    "accuracy": 0.6364779874213836,
+    "ties": 4
+  },
+  "baseline": {
+    "games": 816,
+    "brier": 0.2279636554176288,
+    "log_loss": 0.6479236983997052,
+    "accuracy": 0.6208588957055214,
+    "ties": 1
+  },
+  "challenger_metrics": {
+    "games": 816,
+    "brier": 0.22193933952555794,
+    "log_loss": 0.6355993948738838,
+    "accuracy": 0.6441717791411042,
+    "ties": 1
+  },
+  "active_metrics": {
+    "games": 816,
+    "brier": 0.22180950718771486,
+    "log_loss": 0.6349274146119948,
+    "accuracy": 0.645398773006135,
+    "ties": 1
+  },
+  "calibration": {
+    "status": "evaluated",
+    "version": "confidence-rest-v1",
+    "candidate": {
+      "name": "Calibrated margin-aware Elo",
+      "k_factor": 20.0,
+      "home_advantage": 35.0,
+      "carryover": 0.6666666666666666,
+      "use_margin": true,
+      "probability_scale": 0.9133338279320191,
+      "rest_coefficient": 0.10806757387433766
+    },
+    "training_seasons": [
+      2020,
+      2021,
+      2022
+    ],
+    "penalty": 0.03,
+    "promoted": true,
+    "incumbent": {
+      "name": "Margin-aware Elo",
+      "k_factor": 20.0,
+      "home_advantage": 35.0,
+      "carryover": 0.6666666666666666,
+      "use_margin": true,
+      "probability_scale": 1.0,
+      "rest_coefficient": 0.0
+    },
+    "baseline": {
+      "games": 816,
+      "brier": 0.22193933952555794,
+      "log_loss": 0.6355993948738838,
+      "accuracy": 0.6441717791411042,
+      "ties": 1
+    },
+    "challenger_metrics": {
+      "games": 816,
+      "brier": 0.22180950718771486,
+      "log_loss": 0.6349274146119948,
+      "accuracy": 0.645398773006135,
+      "ties": 1
+    },
+    "brier_improvement_pct": 0.05849901965132778,
+    "by_team": {
+      "PIT": {
+        "baseline": {
+          "games": 51,
+          "brier": 0.2666156723434511,
+          "log_loss": 0.7345230341322022,
+          "accuracy": 0.5294117647058824,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 51,
+          "brier": 0.26442771394022385,
+          "log_loss": 0.7280075463334825,
+          "accuracy": 0.5490196078431373,
+          "ties": 0
+        }
+      },
+      "MIN": {
+        "baseline": {
+          "games": 51,
+          "brier": 0.2261505533537502,
+          "log_loss": 0.6447653511388832,
+          "accuracy": 0.6274509803921569,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 51,
+          "brier": 0.22772852202126323,
+          "log_loss": 0.6479024929117039,
+          "accuracy": 0.6274509803921569,
+          "ties": 0
+        }
+      }
+    },
+    "by_season": [
+      {
+        "season": 2023,
+        "baseline": {
+          "games": 272,
+          "brier": 0.23363330957449674,
+          "log_loss": 0.6611273053463997,
+          "accuracy": 0.6176470588235294,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.2321369564145896,
+          "log_loss": 0.6572529569946759,
+          "accuracy": 0.6176470588235294,
+          "ties": 0
+        }
+      },
+      {
+        "season": 2024,
+        "baseline": {
+          "games": 272,
+          "brier": 0.20952857615568551,
+          "log_loss": 0.6076636328084121,
+          "accuracy": 0.6801470588235294,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.21074416311790142,
+          "log_loss": 0.6101102402605394,
+          "accuracy": 0.6727941176470589,
+          "ties": 0
+        }
+      },
+      {
+        "season": 2025,
+        "baseline": {
+          "games": 272,
+          "brier": 0.2226561328464915,
+          "log_loss": 0.6380072464668424,
+          "accuracy": 0.6346863468634686,
+          "ties": 1
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.22254740203065354,
+          "log_loss": 0.6374190465807701,
+          "accuracy": 0.6457564575645757,
+          "ties": 1
+        }
+      }
+    ],
+    "reason": "Confidence and rest calibration improved both probability scores against the previous default."
+  },
+  "brier_improvement_pct": 2.642665069146366,
+  "by_season": [
+    {
+      "season": 2023,
+      "baseline": {
+        "games": 272,
+        "brier": 0.23474067689941194,
+        "log_loss": 0.6623745271964635,
+        "accuracy": 0.5992647058823529,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.23363330957449674,
+        "log_loss": 0.6611273053463997,
+        "accuracy": 0.6176470588235294,
+        "ties": 0
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.2321369564145896,
+        "log_loss": 0.6572529569946759,
+        "accuracy": 0.6176470588235294,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2024,
+      "baseline": {
+        "games": 272,
+        "brier": 0.2206875222542807,
+        "log_loss": 0.6313290297520948,
+        "accuracy": 0.6470588235294118,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.20952857615568551,
+        "log_loss": 0.6076636328084121,
+        "accuracy": 0.6801470588235294,
+        "ties": 0
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.21074416311790142,
+        "log_loss": 0.6101102402605394,
+        "accuracy": 0.6727941176470589,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2025,
+      "baseline": {
+        "games": 272,
+        "brier": 0.22846276709919375,
+        "log_loss": 0.6500675382505601,
+        "accuracy": 0.6162361623616236,
+        "ties": 1
+      },
+      "challenger": {
+        "games": 272,
+        "brier": 0.2226561328464915,
+        "log_loss": 0.6380072464668424,
+        "accuracy": 0.6346863468634686,
+        "ties": 1
+      },
+      "active": {
+        "games": 272,
+        "brier": 0.22254740203065354,
+        "log_loss": 0.6374190465807701,
+        "accuracy": 0.6457564575645757,
+        "ties": 1
+      }
+    }
+  ],
+  "by_team": {
+    "PIT": {
+      "baseline": {
+        "games": 51,
+        "brier": 0.2545645458964506,
+        "log_loss": 0.7036597501137988,
+        "accuracy": 0.5098039215686274,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 51,
+        "brier": 0.2666156723434511,
+        "log_loss": 0.7345230341322022,
+        "accuracy": 0.5294117647058824,
+        "ties": 0
+      },
+      "active": {
+        "games": 51,
+        "brier": 0.26442771394022385,
+        "log_loss": 0.7280075463334825,
+        "accuracy": 0.5490196078431373,
+        "ties": 0
+      }
+    },
+    "MIN": {
+      "baseline": {
+        "games": 51,
+        "brier": 0.23589014232961655,
+        "log_loss": 0.665123320760479,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      },
+      "challenger": {
+        "games": 51,
+        "brier": 0.2261505533537502,
+        "log_loss": 0.6447653511388832,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      },
+      "active": {
+        "games": 51,
+        "brier": 0.22772852202126323,
+        "log_loss": 0.6479024929117039,
+        "accuracy": 0.6274509803921569,
+        "ties": 0
+      }
+    }
+  },
+  "reliability": [
+    {
+      "low": 0.0,
+      "high": 0.2,
+      "games": 14,
+      "predicted": 0.16827269573009268,
+      "actual": 0.2857142857142857
+    },
+    {
+      "low": 0.2,
+      "high": 0.4,
+      "games": 146,
+      "predicted": 0.327218548183685,
+      "actual": 0.3527397260273973
+    },
+    {
+      "low": 0.4,
+      "high": 0.6,
+      "games": 355,
+      "predicted": 0.5004620983548846,
+      "actual": 0.4676056338028169
+    },
+    {
+      "low": 0.6,
+      "high": 0.8,
+      "games": 265,
+      "predicted": 0.6904262703368685,
+      "actual": 0.7169811320754716
+    },
+    {
+      "low": 0.8,
+      "high": 1.0,
+      "games": 36,
+      "predicted": 0.8432612156482356,
+      "actual": 0.8611111111111112
+    }
+  ],
+  "reason": "Margin-aware settings improved both Brier score and log loss on later seasons. Confidence and rest calibration improved both probability scores against the previous default.",
+  "matchup": {
+    "version": "advanced-v2",
+    "status": "evaluated",
+    "promoted": false,
+    "coverage": {
+      "2020": {
+        "games": 256,
+        "pbp": 256
+      },
+      "2021": {
+        "games": 272,
+        "pbp": 272
+      },
+      "2022": {
+        "games": 271,
+        "pbp": 271
+      },
+      "2023": {
+        "games": 272,
+        "pbp": 272
+      },
+      "2024": {
+        "games": 272,
+        "pbp": 272
+      },
+      "2025": {
+        "games": 272,
+        "pbp": 272
+      }
+    },
+    "reason": "Annual chronological evaluation; explicit experimental selection only. Availability/weather coefficients stay zero until at least 100 earlier snapshots are available. Confirmed lineups require timestamped evidence.",
+    "sources": [
+      {
+        "version": "situations-v1",
+        "season": 2018,
+        "plays": 31149,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2018.csv.gz",
+        "source_sha256": "d37899610b397b96a90da6902827de5b46c5457b93e0e16d5f95a8eb524e4a7d",
+        "retrieved_at": "2026-10-10T16:13:38.234179+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2019,
+        "plays": 31187,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2019.csv.gz",
+        "source_sha256": "b764668137052be23745953cbc33fa17e537a70c81e9b73785a19a15e7288216",
+        "retrieved_at": "2026-10-10T16:13:39.910614+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2020,
+        "plays": 32018,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2020.csv.gz",
+        "source_sha256": "bc954b5780e325df4faa255fac092585c981a4de5d2f553a8a4e0a3c8b3a3cf2",
+        "retrieved_at": "2026-10-10T16:13:41.604889+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2021,
+        "plays": 33018,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2021.csv.gz",
+        "source_sha256": "e8743a568f99667a8bdcd29ba12224ee1782ad2b7916bee78ee335c099383739",
+        "retrieved_at": "2026-10-10T16:13:43.343991+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2022,
+        "plays": 33629,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2022.csv.gz",
+        "source_sha256": "0c69a71eb39498956c7b1d5c1ca52ce7fe679934a95d1af249facb5ea9829ea4",
+        "retrieved_at": "2026-10-10T16:13:45.101094+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2023,
+        "plays": 33355,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2023.csv.gz",
+        "source_sha256": "4649804ee0f0a40b41e51ec75a1ce921949d7fab5459213488656b92f78560e8",
+        "retrieved_at": "2026-10-10T16:13:46.849285+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2024,
+        "plays": 32628,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2024.csv.gz",
+        "source_sha256": "23370d5d10f8104d80d46a1fc5e61f4f6f5a3263fe96fe2dd629913cfcb08c06",
+        "retrieved_at": "2026-10-10T16:13:48.599779+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2025,
+        "plays": 32368,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2025.csv.gz",
+        "source_sha256": "2f135887790a013fd004e609e37096bb4816d5cc80b9f19122e1bad478961978",
+        "retrieved_at": "2026-10-10T16:13:50.250546+00:00"
+      },
+      {
+        "version": "situations-v1",
+        "season": 2026,
+        "plays": 7511,
+        "source_url": "https://github.com/nflverse/nflverse-data/releases/download/pbp/play_by_play_2026.csv.gz",
+        "source_sha256": "e7c162e793cb0f828b97c9c92bf6efd7d60ff35eb6ef9b407b8d16001fd2a39a",
+        "retrieved_at": "2026-10-10T16:13:50.993964+00:00"
+      }
+    ],
+    "evidence_digest": "06b8c26c4627657683ff8efb31be010cda399b2c31e649b59f51abad772bfd5e",
+    "optimizer": {
+      "status": "converged",
+      "converged": true,
+      "iterations": 188,
+      "objective": 0.6326765018329932,
+      "gradient_norm": 9.93808258386783e-08
+    },
+    "name": "Advanced matchup",
+    "baseline": {
+      "games": 816,
+      "brier": 0.22222378048312996,
+      "log_loss": 0.6358548630004971,
+      "accuracy": 0.6355828220858896,
+      "ties": 1
+    },
+    "challenger_metrics": {
+      "games": 816,
+      "brier": 0.22124018843080892,
+      "log_loss": 0.6344006234407288,
+      "accuracy": 0.6638036809815951,
+      "ties": 1
+    },
+    "tuning_seasons": [
+      2020,
+      2021,
+      2022,
+      2023,
+      2024,
+      2025
+    ],
+    "test_seasons": [
+      2023,
+      2024,
+      2025
+    ],
+    "by_season": [
+      {
+        "season": 2023,
+        "baseline": {
+          "games": 272,
+          "brier": 0.23374473581903735,
+          "log_loss": 0.6605817366764121,
+          "accuracy": 0.5955882352941176,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.23284976994381457,
+          "log_loss": 0.658823235844165,
+          "accuracy": 0.6397058823529411,
+          "ties": 0
+        },
+        "support": {
+          "weather_games": 0,
+          "availability_games": 0,
+          "weather_enabled": false,
+          "availability_enabled": false
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 201,
+          "objective": 0.6302668432418933,
+          "gradient_norm": 9.698556667492308e-08
+        }
+      },
+      {
+        "season": 2024,
+        "baseline": {
+          "games": 272,
+          "brier": 0.21056624010323977,
+          "log_loss": 0.6098974882556807,
+          "accuracy": 0.6764705882352942,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.20431354073609462,
+          "log_loss": 0.5975119447196618,
+          "accuracy": 0.7022058823529411,
+          "ties": 0
+        },
+        "support": {
+          "weather_games": 0,
+          "availability_games": 0,
+          "weather_enabled": false,
+          "availability_enabled": false
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 197,
+          "objective": 0.6378615976881794,
+          "gradient_norm": 9.840286253372243e-08
+        }
+      },
+      {
+        "season": 2025,
+        "baseline": {
+          "games": 272,
+          "brier": 0.2223603655271128,
+          "log_loss": 0.6370853640693983,
+          "accuracy": 0.6346863468634686,
+          "ties": 1
+        },
+        "challenger": {
+          "games": 272,
+          "brier": 0.22655725461251763,
+          "log_loss": 0.6468666897583603,
+          "accuracy": 0.6494464944649446,
+          "ties": 1
+        },
+        "support": {
+          "weather_games": 177,
+          "availability_games": 0,
+          "weather_enabled": true,
+          "availability_enabled": false
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 197,
+          "objective": 0.6298663836825407,
+          "gradient_norm": 9.549534713296589e-08
+        }
+      }
+    ],
+    "support": {
+      "weather_games": 357,
+      "availability_games": 0,
+      "weather_enabled": true,
+      "availability_enabled": false
+    },
+    "weights": {
+      "Passing offense": 0.043695832783625314,
+      "Passing defense": -0.05901372830104189,
+      "Rushing offense": 0.015106219812925691,
+      "Rushing defense": 0.02159418417210603,
+      "Rest advantage": 0.03487293148242929,
+      "Quarterback change": 0.063345635905134,
+      "Situational offense: Pass EPA": 0.029127139198825105,
+      "Situational offense: Pass success": 0.042234925510764576,
+      "Situational offense: Rush EPA": 0.006294451173220319,
+      "Situational offense: Rush success": 0.05319644061302127,
+      "Situational offense: Sack rate": -0.09864808159984956,
+      "Situational offense: Early-down EPA": -0.0016074066336129842,
+      "Situational offense: Third/fourth-and-long success": 0.014138692630327245,
+      "Situational offense: Pass reliance": 0.0007517960910603741,
+      "Situational defense: Pass EPA": -0.05279258810594122,
+      "Situational defense: Pass success": -0.01756420250434117,
+      "Situational defense: Rush EPA": 0.016889837352850184,
+      "Situational defense: Rush success": 0.011666783156740135,
+      "Situational defense: Sack rate": -0.007519251305722322,
+      "Situational defense: Early-down EPA": 0.024810077872226426,
+      "Situational defense: Third/fourth-and-long success": -0.015809780239625572,
+      "Situational defense: Pass reliance": 0.02814357957974187,
+      "Travel distance": -0.10405936361115013,
+      "Early body-clock kickoff": -0.022702313757236425,
+      "Late body-clock kickoff": -0.0001361115530905999,
+      "Short-rest travel": -0.004416928261134542,
+      "Consecutive away games": 0.0009627896833834061,
+      "Wind \u00d7 passing reliance": -0.0011370227662055269,
+      "Rain \u00d7 passing reliance": 0.0038563475237209325,
+      "Cold \u00d7 passing reliance": 0.0040612550007870455,
+      "Unavailable receivers": 0.0,
+      "Unavailable offensive line": 0.0,
+      "Unavailable defenders": 0.0,
+      "Questionable players": 0.0
+    },
+    "qualifies": true,
+    "by_team": {
+      "PIT": {
+        "baseline": {
+          "games": 51,
+          "brier": 0.26825748841289276,
+          "log_loss": 0.7388069525626826,
+          "accuracy": 0.5098039215686274,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 51,
+          "brier": 0.26767607172365726,
+          "log_loss": 0.737127907940563,
+          "accuracy": 0.5686274509803921,
+          "ties": 0
+        }
+      },
+      "MIN": {
+        "baseline": {
+          "games": 51,
+          "brier": 0.22941055557785742,
+          "log_loss": 0.6511480214063786,
+          "accuracy": 0.5686274509803921,
+          "ties": 0
+        },
+        "challenger": {
+          "games": 51,
+          "brier": 0.22864035281813166,
+          "log_loss": 0.6500565443237778,
+          "accuracy": 0.5882352941176471,
+          "ties": 0
+        }
+      }
+    },
+    "ablations": [
+      {
+        "name": "QB + weekly efficiency",
+        "metrics": {
+          "games": 816,
+          "brier": 0.22210152440754213,
+          "log_loss": 0.6355888226549754,
+          "accuracy": 0.6355828220858896,
+          "ties": 1
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 185,
+          "objective": 0.6352519123158336,
+          "gradient_norm": 9.616483385901237e-08
+        }
+      },
+      {
+        "name": "+ situational play-by-play",
+        "metrics": {
+          "games": 816,
+          "brier": 0.2220186875348012,
+          "log_loss": 0.635658148252789,
+          "accuracy": 0.6343558282208589,
+          "ties": 1
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 197,
+          "objective": 0.6330598767671041,
+          "gradient_norm": 9.665356945356908e-08
+        }
+      },
+      {
+        "name": "+ travel and body-clock",
+        "metrics": {
+          "games": 816,
+          "brier": 0.2212399846318214,
+          "log_loss": 0.6343998280056694,
+          "accuracy": 0.6638036809815951,
+          "ties": 1
+        },
+        "optimizer": {
+          "status": "converged",
+          "converged": true,
+          "iterations": 197,
+          "objective": 0.6298686278699978,
+          "gradient_norm": 9.548095816921679e-08
+        }
+      },
+      {
+        "name": "+ forecast weather / supported availability",
+        "metrics": {
+          "games": 816,
+          "brier": 0.22124018843080892,
+          "log_loss": 0.6344006234407288,
+          "accuracy": 0.6638036809815951,
+          "ties": 1
+        },
+        "optimizer": null
+      }
+    ],
+    "uncertainty": {
+      "method": "Paired season/week block bootstrap",
+      "samples": 2000,
+      "blocks": 54,
+      "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+      "brier": {
+        "delta": -0.0009835920523210407,
+        "interval_95": [
+          -0.005135564460604934,
+          0.0030986621606291795
+        ]
+      },
+      "log_loss": {
+        "delta": -0.0014542395597679709,
+        "interval_95": [
+          -0.010582474808261052,
+          0.007791676623736169
+        ]
+      }
+    },
+    "brier_improvement_pct": 0.44261331986281766
+  },
+  "feature_sources": [
+    {
+      "file": "stats_team_week_2018.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:39.098958+00:00",
+      "sha256": "d2df3adf2fbadfb597bc334807f5020aefe2b2ae13d28155f7f01cb981f00555"
+    },
+    {
+      "file": "stats_player_week_2018.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:39.732468+00:00",
+      "sha256": "c53021bcfc9f89d30edd6f1fe145a1d7d6ce469efeec75974fe9f0adac568642"
+    },
+    {
+      "file": "stats_team_week_2019.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:40.141486+00:00",
+      "sha256": "d3311b008de52dd95729d76d225b45f51eb91932e8fa3c38c18548397aa00a06"
+    },
+    {
+      "file": "stats_player_week_2019.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:40.780910+00:00",
+      "sha256": "a05558126b1209b80fe11a8f18938cb35816370bf9990975a87de49e9eed7376"
+    },
+    {
+      "file": "stats_team_week_2020.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:41.203707+00:00",
+      "sha256": "a8f2cc2055404fc293105af25f14ff28593c32961912e752e2e50f4a6ba461ad"
+    },
+    {
+      "file": "stats_player_week_2020.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:41.818852+00:00",
+      "sha256": "05b992676faccc8940efbf6242cb76358069372d31d7c2e02c1a4acdcd3cbe18"
+    },
+    {
+      "file": "stats_team_week_2021.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:42.313305+00:00",
+      "sha256": "a094523217f7f351a79f5e667dbe67267e0861a3b76a7a3b62a1cfe49f289673"
+    },
+    {
+      "file": "stats_player_week_2021.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:42.928010+00:00",
+      "sha256": "41915fb49238902ad1f129ebf0405b11a1e710454ae0fe8f7b3e4f9145875f48"
+    },
+    {
+      "file": "stats_team_week_2022.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:43.370653+00:00",
+      "sha256": "9803875bd0b74aa49230288d45359c75e45910f1cf1953ea0f07b9d3db35e4d1"
+    },
+    {
+      "file": "stats_player_week_2022.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:43.970388+00:00",
+      "sha256": "ad426c3fe5bf1cc30c3f137fdfe96d054e19d400879ee4413129da49fa7b54be"
+    },
+    {
+      "file": "stats_team_week_2023.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:44.374529+00:00",
+      "sha256": "dc5a387daabe8663deaddac492ad7020d47fb1a66048690b355b406cd8e4c454"
+    },
+    {
+      "file": "stats_player_week_2023.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:44.937194+00:00",
+      "sha256": "f19cb71a5de0dce7fd09376026237c9ee9d5a93fe13815a2ea3ec2d37204cb17"
+    },
+    {
+      "file": "stats_team_week_2024.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:45.273611+00:00",
+      "sha256": "b207a1430c2715d03bbf1844c4eae98695f364851ff6025f422febc2c13f5255"
+    },
+    {
+      "file": "stats_player_week_2024.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:45.910891+00:00",
+      "sha256": "3ddc45a84f759aa348ce465ae001752c530575455717657cdfe1f8abfcdb4759"
+    },
+    {
+      "file": "stats_team_week_2025.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:46.334880+00:00",
+      "sha256": "91058a59d894855377b2f39f40c4e7bdbeef96d12144289dc68215209a1c93cb"
+    },
+    {
+      "file": "stats_player_week_2025.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:46.876081+00:00",
+      "sha256": "e5e0615b3d96a3eaebfaee91e55afb4a4e7fe0caf057454177bcd7d6ad4bcfc2"
+    },
+    {
+      "file": "stats_team_week_2026.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:47.225220+00:00",
+      "sha256": "406dc1771fd37094ed8f0e597de5cdb965db2d12e09d354f1db1d7b55b832864"
+    },
+    {
+      "file": "stats_player_week_2026.csv",
+      "warning": "Offline snapshot",
+      "downloaded_at": "2026-10-10T16:13:47.646933+00:00",
+      "sha256": "bda143a5f21ce606cf62cbf1f2ba832392e9f2cde73a8f733d4bc5d04f1598ff"
+    },
+    {
+      "file": "roster_2026.csv",
+      "warning": "No saved data"
+    },
+    {
+      "file": "injuries_2026.csv",
+      "warning": "No saved data"
+    }
+  ]
+}

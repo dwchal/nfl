@@ -133,8 +133,9 @@ class AdvancedFeaturesTests(unittest.TestCase):
         windows = []
         def fit_without_tuning(rows, indices, penalty):
             windows.append(max(r["season"] for r in rows))
-            return (0.,) * len(LABELS)
-        with patch("steelers.advanced.select_model", return_value=(BASELINE, {})), patch("steelers.advanced.fit", side_effect=fit_without_tuning):
+            return (0.,) * len(LABELS), {"status": "converged", "converged": True, "iterations": 0,
+                                          "objective": 0.0, "gradient_norm": 0.0}
+        with patch("steelers.advanced.select_model", return_value=(BASELINE, {})), patch("steelers.advanced.fit_diagnostic", side_effect=fit_without_tuning):
             model, probabilities = evaluate_advanced(games, 2026, BASELINE, bundle_for(games), {"plays": plays})
         self.assertEqual(windows, [2022] * 4 + [2023] * 4 + [2024] * 4 + [2025])
         self.assertEqual(model.report["status"], "evaluated")

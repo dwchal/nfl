@@ -11,11 +11,11 @@ from .evidence import Evidence, EvidenceStore, timestamp
 from .evaluation import paired_uncertainty
 from .forecast import kickoff_utc
 from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
-                      corrected, fit, logit, replay)
+                      corrected, fit_diagnostic, logit, replay)
 from .model import backtest, metrics, select_model, team_key
 from .pbp import PBPStore
 
-VERSION = "advanced-v1"
+VERSION = "advanced-v2"
 LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offense", "defense") for label in pbp.LABELS) + travel.LABELS + (
     "Wind × passing reliance", "Rain × passing reliance", "Cold × passing reliance",
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")
@@ -175,7 +175,7 @@ def evaluate_advanced(games, season, config, bundle, data):
                            "pbp": sum(r["season"] == year and all(team_key(t) in data.get("plays", {}).get(r["id"], {}) for t in (r["home"], r["away"])) for r in regular)} for year in years}
     report = {"version": VERSION, "status": "unavailable", "promoted": False, "coverage": coverage,
               "reason": "Prepare six prior seasons with at least 95% play-by-play coverage.", "sources": data.get("sources", []),
-              "evidence_digest": data.get("evidence", Evidence()).digest}
+              "evidence_digest": data.get("evidence", Evidence()).digest, "optimizer": None}
     if any(c["games"] < 200 or c["pbp"] / c["games"] < .95 for c in coverage.values()):
         return AdvancedModel((0.,) * len(LABELS), state, report), {}
     predictions, baseline, folds = [], [], []
@@ -183,27 +183,40 @@ def evaluate_advanced(games, season, config, bundle, data):
               "+ situational play-by-play": tuple(range(22)),
               "+ travel and body-clock": tuple(range(WEATHER_START))}
     ablations = {name: [] for name in groups}
+    ablation_optimizers = {name: [] for name in groups}
+
+    def converged_weights(rows, indices):
+        weights, optimizer = fit_diagnostic(rows, indices, penalty=.1)
+        if not optimizer["converged"]:
+            weights = (0.,) * len(weights)
+        return weights, optimizer
+
     for year in years[3:]:
         train = [r for r in regular if r["season"] < year]
         target = [r for r in regular if r["season"] == year]
         indices, support = enabled_indices(train, state.contexts)
-        weights = fit(train, indices, penalty=.1)
+        weights, optimizer = converged_weights(train, indices)
         predicted = [{**r, "probability": corrected(r["probability"], r["features"], weights)} for r in target]
         predictions.extend(predicted)
         baseline.extend(target)
         for name, group in groups.items():
-            subset_weights = fit(train, group, penalty=.1)
+            subset_weights, subset_optimizer = converged_weights(train, group)
+            ablation_optimizers[name].append(subset_optimizer)
             ablations[name].extend({**r, "probability": corrected(r["probability"], r["features"], subset_weights)} for r in target)
-        folds.append({"season": year, "baseline": metrics(target), "challenger": metrics(predicted), "support": support})
+        folds.append({"season": year, "baseline": metrics(target), "challenger": metrics(predicted),
+                      "support": support, "optimizer": optimizer})
     indices, support = enabled_indices(regular, state.contexts)
-    weights = fit(regular, indices, penalty=.1)
+    weights, optimizer = converged_weights(regular, indices)
     b, c = metrics(baseline), metrics(predictions)
-    qualifies = c["brier"] < b["brier"] and c["log_loss"] < b["log_loss"] and c["accuracy"] > b["accuracy"]
+    qualifies = (optimizer["converged"] and c["brier"] < b["brier"] and c["log_loss"] < b["log_loss"]
+                 and c["accuracy"] > b["accuracy"])
     report.update(status="evaluated", name="Advanced matchup", baseline=b, challenger_metrics=c,
                   tuning_seasons=years, test_seasons=years[3:], by_season=folds, support=support,
-                  weights=dict(zip(LABELS, weights)), qualifies=qualifies,
+                  weights=dict(zip(LABELS, weights)), qualifies=qualifies, optimizer=optimizer,
                   by_team={t: {"baseline": metrics(baseline, t), "challenger": metrics(predictions, t)} for t in ("PIT", "MIN")},
-                  ablations=[{"name": name, "metrics": metrics(values)} for name, values in ablations.items()] + [{"name": "+ forecast weather / supported availability", "metrics": c}],
+                  ablations=[{"name": name, "metrics": metrics(values),
+                              "optimizer": ablation_optimizers[name][-1]}
+                              for name, values in ablations.items()] + [{"name": "+ forecast weather / supported availability", "metrics": c, "optimizer": None}],
                   uncertainty=paired_uncertainty(baseline, predictions),
                   brier_improvement_pct=100 * (b["brier"] - c["brier"]) / b["brier"],
                   reason="Annual chronological evaluation; explicit experimental selection only. Availability/weather coefficients stay zero until at least 100 earlier snapshots are available. Confirmed lineups require timestamped evidence.")

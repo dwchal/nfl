@@ -16,6 +16,7 @@ from pathlib import Path
 from .data import parse_games
 from .evaluation import paired_uncertainty
 from .model import backtest, metrics, select_model, sigmoid, team_key
+from .optimization import fit_logistic_offset
 
 CONTEXT = ("Home field", "Permanent dome", "Retractable roof", "Outdoor stadium",
            "Early kickoff ET", "Evening kickoff ET", "Thursday", "Monday", "Saturday")
@@ -151,19 +152,10 @@ def feature_history(games, stats):
 
 
 def fit(rows, indices, penalty=.1):
-    weights = [0.] * len(indices)
-    inputs = [(r["offset"], [max(-4, min(4, r["features"][i])) for i in indices], r["result"]) for r in rows]
-    for _ in range(200):
-        gradient = [0.] * len(indices)
-        for offset, features, outcome in inputs:
-            error = sigmoid(offset + sum(w * x for w, x in zip(weights, features))) - outcome
-            for i, value in enumerate(features):
-                gradient[i] += error * value
-        steps = [.5 * (g / max(1, len(inputs)) + penalty * w) for g, w in zip(gradient, weights)]
-        weights = [w - s for w, s in zip(weights, steps)]
-        if max(abs(s) for s in steps) < 1e-7:
-            break
-    return weights
+    """Selected-coefficient view of the shared stable optimizer."""
+    width = len(rows[0]["features"]) if rows else max((int(i) for i in indices), default=-1) + 1
+    weights, _ = fit_logistic_offset(rows, indices, penalty, width=width)
+    return [weights[i] for i in indices]
 
 
 def pick_comparison(baseline, candidate, samples=2000):
@@ -215,18 +207,24 @@ def experiment(games, stats, start=2021, end=2025, history_start=2016):
             target = [r for r in baseline if r["season"] == year]
             if len(training) < 500 or len(target) < 200:
                 raise ValueError(f"Insufficient complete history for {year}")
-            weights = fit(training, indices)
+            weights, optimizer = fit_logistic_offset(training, indices, penalty=.1)
+            if not optimizer["converged"]:
+                # A failed fit cannot silently become a forecast: score the
+                # documented zero-correction (Elo) fallback on the same games.
+                weights = [0.0] * len(indices)
             predicted = [{**r, "probability": sigmoid(r["offset"] + sum(w * max(-4, min(4, r["features"][i]))
                                                                                       for w, i in zip(weights, indices)))} for r in target]
             predictions.extend(predicted)
             folds.append({"season": year, "training_seasons": sorted({r["season"] for r in training}),
                           "weights": dict(zip((LABELS[i] for i in indices), weights)),
+                          "optimizer": optimizer,
                           "baseline": metrics(target), "candidate": metrics(predicted)})
         results[name] = {"metrics": metrics(predictions), "by_season": folds,
                          "by_team": {t: {"baseline": metrics(baseline, t), "candidate": metrics(predictions, t)} for t in ("PIT", "MIN")},
                          "uncertainty": paired_uncertainty(baseline, predictions),
                          "winner_picks": pick_comparison(baseline, predictions)}
     return {"protocol": "Each season refits on up to six completed earlier seasons; each historical Elo offset was itself selected before its season. Fixed L2 penalty 0.1. Team statistics and venue types become available the following day. No production model is selected by this experiment.",
+            "optimizer": "Penalized logistic fit uses stable softplus evaluation with a backtracking step (step 0.5 halved until sufficient decrease); the objective is non-increasing and convergence is reported per season. Fits that do not converge fall back to zero correction (Elo) on the same games.",
             "limitations": "Retrospective exploration of seven feature groups, not an untouched/live audit. Final schedule revisions and corrected statistics may differ from information available earlier. Kickoff is Eastern time, not team body-clock time. Actual weather and current-game roof position are excluded. No confirmed starting-QB or injury information is used.",
             "baseline": metrics(baseline), "experiments": results}
 

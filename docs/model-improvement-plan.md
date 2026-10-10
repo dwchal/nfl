@@ -3,7 +3,9 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only; the proposed changes have not been fitted or deployed.
+documentation only. Item 1 has been implemented as recorded in the
+[implementation record](#item-1-implementation-record); all later items remain
+proposed and have not been fitted or deployed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -744,3 +746,71 @@ Provider contracts checked on the review date:
 - [Open-Meteo Previous Runs](https://open-meteo.com/en/docs/previous-runs-api):
   fixed lead-time hourly values differ from an individual model run. The
   conservative availability time of the whole game window matters.
+
+## Item 1 implementation record
+
+Implemented 2026-10-10 against the review commit, one item per the plan.
+
+**Changed.** New `steelers/optimization.py` implements stable `softplus`/`sigmoid`,
+the shared `objective`/`gradient`, and `fit_logistic_offset` (zero start,
+backtracking from step 0.5 with the sufficient-decrease condition, `max_iter=2000`,
+`tol=1e-7`, full-width weights with unselected coefficients exactly zero, explicit
+`insufficient_data`/`max_iterations`/`step_too_small` statuses).
+`matchup.fit_diagnostic` exposes it with the matchup width convention and keeps the
+public `fit(...) -> tuple` wrapper; `matchup.evaluate` and `advanced.evaluate_advanced`
+consume the diagnostic, record it in the report (`optimizer` fields, additive), and
+fall back to zero weights (Elo) whenever a fit does not converge, which also blocks
+promotion. `context_research.fit` preserves its selected-coefficient return shape over
+the shared solver, and `experiment` records per-fold optimizer status with the same
+zero-correction fallback. Versions bumped: `matchup-v1` → `matchup-v2`,
+`advanced-v1` → `advanced-v2` (`static/app.js` version check updated to match).
+New `tests/test_optimization.py` (12 tests) covers the correlated-feature failure,
+non-increasing objective, non-extreme mixed-label probability, analytical-versus-
+central finite-difference gradients, constant/empty columns, invalid inputs, and
+nonconsecutive index placement. Full suite: 69 → 81 tests, all passing on Python
+3.14.7; `node --check static/app.js` passes.
+
+**Synthetic probe.** The review's ten-identical-`[4.0]*34`-row, six-win/four-loss,
+penalty-0.1 probe now converges in 6 iterations to probability **0.5999** (log loss
+0.673, objective 0.673 ≤ 0.693 at zero weights) instead of the old 0.999999998
+(log loss ≈ 8.0).
+
+**Real-data A/B.** The fresh clone had no `.cache/`, so nflverse inputs were
+downloaded for the rerun (games.csv; team/player weekly stats 2016–2026;
+play-by-play, depth charts, and previous-run weather history 2018–2026 via
+`steelers.prepare`). The current provider files differ from the committed snapshots
+(games.csv SHA now `a06ca5f6…` vs `d52363f2…`), so committed-file diffs mix data
+drift with the optimizer change. The controlled comparison therefore ran the
+review-commit code and the new code against the *identical* local cache in separate
+worktrees:
+
+| Model (same `.cache`) | Weights | Challenger Brier | Challenger log loss | Verdict | Optimizer |
+| --- | --- | --- | --- | --- | --- |
+| matchup (6 features) | max Δ 1.1e-4 | Δ 1.7e-7 | Δ 3.3e-7 | unchanged: not promoted, Elo default | converged, 460 iters |
+| advanced, weather off | max Δ < 1e-6 | Δ 1.4e-9 | Δ 1.9e-10 | unchanged: qualifies | all fits converged (188–201 iters) |
+| advanced, weather on (357 games) | max Δ 7.7e-7 | Δ 2.2e-9 | Δ 4.0e-9 | unchanged: qualifies | all fits converged |
+
+The weather-on rerun reproduces the committed
+[advanced evaluation](advanced-evaluation-2026.json) challenger Brier to seven
+decimal places (0.2212402) and sample weights to five, despite the newer provider
+file. The context-research A/B is neutral for five of seven groups (weights within
+1e-6, season Brier within 1e-8); the *kickoff time* and *team efficiency* groups
+move more (max weight Δ 3.2e-2 / 1.0e-1) because the old fixed-step routine had
+stalled far from its minimum and the stable solver converges it fully (all folds
+report `converged`). Those are research diagnostics, not deployed models, and the
+moves are recorded rather than tuned away. The Elo calibration path
+(`model.fit_calibration`) is unchanged, so the regenerated
+[calibration audit](review-candidate-calibration-audit.json) reproduces the existing
+walk-forward audit on the current schedule file.
+
+**Regenerated reports (new files; committed snapshots untouched).**
+[review-candidate-elo-matchup.json](review-candidate-elo-matchup.json),
+[review-candidate-advanced.json](review-candidate-advanced.json),
+[review-candidate-calibration-audit.json](review-candidate-calibration-audit.json),
+[review-candidate-context.json](review-candidate-context.json).
+
+**Limits.** No fit in any regenerated report failed to converge, so the Elo
+fallback path was not exercised on real data (it is covered by fixture tests); all
+reported results remain retrospective. Optimizer settings were not tuned on
+held-out outcomes. This record predates items 2–9, whose data-quality fixes
+(unknown ≠ zero, explicit forecast cutoffs) may change these fits when they land.

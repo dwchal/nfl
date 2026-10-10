@@ -1,0 +1,2042 @@
+{
+  "schedule_sha256": "a06ca5f608332ba4936d5f13f8868d92bf423b9d8b88b3c2dba293162575cfac",
+  "sources": [
+    {
+      "file": "stats_team_week_2016.csv",
+      "sha256": "1a6f704d6eda8d26820ffadba05fbb42e6e60d1dc33dc93bc365c244d25349db"
+    },
+    {
+      "file": "stats_team_week_2017.csv",
+      "sha256": "c09fa261c37069b1ffc4ee340b8c90458d7453333321e97d13d6fb8a0aab51f4"
+    },
+    {
+      "file": "stats_team_week_2018.csv",
+      "sha256": "d2df3adf2fbadfb597bc334807f5020aefe2b2ae13d28155f7f01cb981f00555"
+    },
+    {
+      "file": "stats_team_week_2019.csv",
+      "sha256": "d3311b008de52dd95729d76d225b45f51eb91932e8fa3c38c18548397aa00a06"
+    },
+    {
+      "file": "stats_team_week_2020.csv",
+      "sha256": "a8f2cc2055404fc293105af25f14ff28593c32961912e752e2e50f4a6ba461ad"
+    },
+    {
+      "file": "stats_team_week_2021.csv",
+      "sha256": "a094523217f7f351a79f5e667dbe67267e0861a3b76a7a3b62a1cfe49f289673"
+    },
+    {
+      "file": "stats_team_week_2022.csv",
+      "sha256": "9803875bd0b74aa49230288d45359c75e45910f1cf1953ea0f07b9d3db35e4d1"
+    },
+    {
+      "file": "stats_team_week_2023.csv",
+      "sha256": "dc5a387daabe8663deaddac492ad7020d47fb1a66048690b355b406cd8e4c454"
+    },
+    {
+      "file": "stats_team_week_2024.csv",
+      "sha256": "b207a1430c2715d03bbf1844c4eae98695f364851ff6025f422febc2c13f5255"
+    },
+    {
+      "file": "stats_team_week_2025.csv",
+      "sha256": "91058a59d894855377b2f39f40c4e7bdbeef96d12144289dc68215209a1c93cb"
+    }
+  ],
+  "protocol": "Each season refits on up to six completed earlier seasons; each historical Elo offset was itself selected before its season. Fixed L2 penalty 0.1. Team statistics and venue types become available the following day. No production model is selected by this experiment.",
+  "optimizer": "Penalized logistic fit uses stable softplus evaluation with a backtracking step (step 0.5 halved until sufficient decrease); the objective is non-increasing and convergence is reported per season. Fits that do not converge fall back to zero correction (Elo) on the same games.",
+  "limitations": "Retrospective exploration of seven feature groups, not an untouched/live audit. Final schedule revisions and corrected statistics may differ from information available earlier. Kickoff is Eastern time, not team body-clock time. Actual weather and current-game roof position are excluded. No confirmed starting-QB or injury information is used.",
+  "baseline": {
+    "games": 1359,
+    "brier": 0.22412059439349352,
+    "log_loss": 0.6406200907071078,
+    "accuracy": 0.6265682656826568,
+    "ties": 4
+  },
+  "experiments": {
+    "Home-field recalibration": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.2235692137096037,
+        "log_loss": 0.6398223325203508,
+        "accuracy": 0.629520295202952,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.07045305161668204
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 74,
+            "objective": 0.6272892817612522,
+            "gradient_norm": 8.544725104038531e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22906048702997972,
+            "log_loss": 0.6532280627889828,
+            "accuracy": 0.5977859778597786,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.09397104957020105
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 75,
+            "objective": 0.6326982602281148,
+            "gradient_norm": 9.258110494729521e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22300441445571817,
+            "log_loss": 0.6391040112508566,
+            "accuracy": 0.6282527881040892,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.08129487142620972
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 74,
+            "objective": 0.6338570689493879,
+            "gradient_norm": 9.190975917318378e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.23350873147846665,
+            "log_loss": 0.659987856292714,
+            "accuracy": 0.5992647058823529,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.08819289426914348
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 74,
+            "objective": 0.6400995305436988,
+            "gradient_norm": 9.092690797518621e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.20982474910656473,
+            "log_loss": 0.6089209306127626,
+            "accuracy": 0.6727941176470589,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.11401533641996887
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 75,
+            "objective": 0.63587235011891,
+            "gradient_norm": 9.937575295645984e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22244561000944413,
+            "log_loss": 0.6378681607694172,
+            "accuracy": 0.6494464944649446,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.2640970361823422,
+            "log_loss": 0.7328717605920911,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22357579702485392,
+            "log_loss": 0.6383258392222811,
+            "accuracy": 0.6,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.0005513806838898007,
+          "interval_95": [
+            -0.0015235712519274924,
+            0.00036094853853095533
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0007977581867573187,
+          "interval_95": [
+            -0.0029747382161612822,
+            0.0012684751319450291
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 26,
+        "new_errors": 22,
+        "net_correct_picks": 4,
+        "accuracy_delta": 0.002952029520295203,
+        "interval_95": [
+          -0.005809731299927378,
+          0.01168736303871439
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "Stadium type": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.22351413436255635,
+        "log_loss": 0.6397215163374277,
+        "accuracy": 0.633210332103321,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.06645166673809896,
+            "Permanent dome": -0.03453036245054181,
+            "Retractable roof": -0.051382846617575834,
+            "Outdoor stadium": 0.009186768552602784
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 162,
+            "objective": 0.6270281972771207,
+            "gradient_norm": 9.636396983972104e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22842754131658732,
+            "log_loss": 0.6517963970793518,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.08936449291889151,
+            "Permanent dome": -0.031176319821623458,
+            "Retractable roof": -0.0814631740252727,
+            "Outdoor stadium": 0.014988392661141397
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 163,
+            "objective": 0.6321633957798904,
+            "gradient_norm": 9.644392567551008e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22245562418670747,
+            "log_loss": 0.6380091489552486,
+            "accuracy": 0.6282527881040892,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.07883281363575032,
+            "Permanent dome": -0.015332653244745793,
+            "Retractable roof": -0.089075492602242,
+            "Outdoor stadium": 0.018785573798945392
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 165,
+            "objective": 0.6332632081291558,
+            "gradient_norm": 9.85549807718672e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.23398452382302248,
+            "log_loss": 0.6611043473645544,
+            "accuracy": 0.6029411764705882,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.08136798279901643,
+            "Permanent dome": -0.035842293371990505,
+            "Retractable roof": -0.06054983027108259,
+            "Outdoor stadium": 0.008133024257723198
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 158,
+            "objective": 0.6397643383339798,
+            "gradient_norm": 9.510731008560008e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.210190019648093,
+            "log_loss": 0.6095724180350155,
+            "accuracy": 0.6838235294117647,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.09507632045145652,
+            "Permanent dome": -0.021601693433177988,
+            "Retractable roof": -0.05866925474127333,
+            "Outdoor stadium": -0.02166739746464111
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 160,
+            "objective": 0.6356068672284116,
+            "gradient_norm": 9.544037211494522e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22250907125684263,
+            "log_loss": 0.6381189747846511,
+            "accuracy": 0.6494464944649446,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.264346267044765,
+            "log_loss": 0.7335671467399032,
+            "accuracy": 0.5238095238095238,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22451057201937324,
+            "log_loss": 0.6404607238068125,
+            "accuracy": 0.611764705882353,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.0006064600309371666,
+          "interval_95": [
+            -0.0016466728797695188,
+            0.0004100363168225658
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0008985743696804931,
+          "interval_95": [
+            -0.0032301687277916462,
+            0.0013168662495774688
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 32,
+        "new_errors": 23,
+        "net_correct_picks": 9,
+        "accuracy_delta": 0.006642066420664207,
+        "interval_95": [
+          -0.0014847809948032665,
+          0.014992503748125937
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "Kickoff time": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.2235849624997045,
+        "log_loss": 0.6398081288108229,
+        "accuracy": 0.6317343173431734,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.06225438591366546,
+            "Early kickoff ET": 0.0,
+            "Evening kickoff ET": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 171,
+            "objective": 0.6271495521321959,
+            "gradient_norm": 9.8596539536977e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22925996383822153,
+            "log_loss": 0.6535822086111106,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.07965989790225089,
+            "Early kickoff ET": 0.0,
+            "Evening kickoff ET": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 173,
+            "objective": 0.6323720321824194,
+            "gradient_norm": 9.432001144699109e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.2229385511107543,
+            "log_loss": 0.638929796969047,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.0735683649735903,
+            "Early kickoff ET": 0.0,
+            "Evening kickoff ET": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 174,
+            "objective": 0.6337301012932939,
+            "gradient_norm": 9.51732316155536e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.2335032181712473,
+            "log_loss": 0.6599815093940999,
+            "accuracy": 0.6029411764705882,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.08020286887819869,
+            "Early kickoff ET": 0.0,
+            "Evening kickoff ET": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 170,
+            "objective": 0.6400388810210278,
+            "gradient_norm": 9.973439262010806e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.20985815453458553,
+            "log_loss": 0.6089393283821676,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.09896578096279578,
+            "Early kickoff ET": 0.0,
+            "Evening kickoff ET": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 169,
+            "objective": 0.6356774024659415,
+            "gradient_norm": 9.918340022603642e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22236254833125452,
+            "log_loss": 0.6376045715365053,
+            "accuracy": 0.6531365313653137,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.26412187586125746,
+            "log_loss": 0.7329477393593771,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22348376929574576,
+            "log_loss": 0.6381195465487216,
+            "accuracy": 0.6,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.000535631893789007,
+          "interval_95": [
+            -0.0013860082775377911,
+            0.0002647288909479123
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0008119618962853187,
+          "interval_95": [
+            -0.0027324023620409945,
+            0.0010113818751642163
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 25,
+        "new_errors": 18,
+        "net_correct_picks": 7,
+        "accuracy_delta": 0.0051660516605166054,
+        "interval_95": [
+          -0.0036603221083455345,
+          0.013858497447118891
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "Day of week": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.22357407746725447,
+        "log_loss": 0.6398248560903521,
+        "accuracy": 0.629520295202952,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.0689686100642814,
+            "Thursday": 0.0,
+            "Monday": 0.0,
+            "Saturday": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 186,
+            "objective": 0.62723531873362,
+            "gradient_norm": 9.563866977622265e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.2290961364532289,
+            "log_loss": 0.6532911063828102,
+            "accuracy": 0.5977859778597786,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.09304154945286708,
+            "Thursday": 0.0,
+            "Monday": 0.0,
+            "Saturday": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 183,
+            "objective": 0.6326761162918583,
+            "gradient_norm": 9.909254447331914e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22299950522765216,
+            "log_loss": 0.6390913218165137,
+            "accuracy": 0.6282527881040892,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.08003710668099981,
+            "Thursday": 0.0,
+            "Monday": 0.0,
+            "Saturday": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 164,
+            "objective": 0.6338350244612337,
+            "gradient_norm": 9.822191301641671e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.233507430828502,
+            "log_loss": 0.6599859217781877,
+            "accuracy": 0.5992647058823529,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.08624006032231218,
+            "Thursday": 0.0,
+            "Monday": 0.0,
+            "Saturday": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 172,
+            "objective": 0.6400505400122254,
+            "gradient_norm": 9.59733347577138e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.20983228949849972,
+            "log_loss": 0.6089241361929026,
+            "accuracy": 0.6727941176470589,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.11195002488200985,
+            "Thursday": 0.0,
+            "Monday": 0.0,
+            "Saturday": 0.0
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 176,
+            "objective": 0.6357926014436434,
+            "gradient_norm": 9.712494652980297e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22243291293045,
+            "log_loss": 0.6378290974641654,
+            "accuracy": 0.6494464944649446,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.2640874271264433,
+            "log_loss": 0.7328539679197584,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22357054939107388,
+            "log_loss": 0.638311117704707,
+            "accuracy": 0.6,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.0005465169262390268,
+          "interval_95": [
+            -0.0015012787417729094,
+            0.0003497795101407196
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0007952346167557804,
+          "interval_95": [
+            -0.0029314271507240855,
+            0.0012331262146460613
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 26,
+        "new_errors": 22,
+        "net_correct_picks": 4,
+        "accuracy_delta": 0.002952029520295203,
+        "interval_95": [
+          -0.005809731299927378,
+          0.01168736303871439
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "All schedule context": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.22351318023047542,
+        "log_loss": 0.6397734618229828,
+        "accuracy": 0.629520295202952,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.058928214406260844,
+            "Permanent dome": -0.03264892868080303,
+            "Retractable roof": -0.04981906399722779,
+            "Outdoor stadium": 0.013450411338634179,
+            "Early kickoff ET": -0.03244716164736365,
+            "Evening kickoff ET": 0.02676610973260549,
+            "Thursday": -0.004929087185781593,
+            "Monday": -0.030676316564943466,
+            "Saturday": -0.018244959055415184
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 192,
+            "objective": 0.6268227073762611,
+            "gradient_norm": 9.726392919979371e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22808677295814606,
+            "log_loss": 0.6510789999606695,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.07737879972785756,
+            "Permanent dome": -0.02917743389998711,
+            "Retractable roof": -0.0784573558549963,
+            "Outdoor stadium": 0.022214638758123382,
+            "Early kickoff ET": -0.05310801980631569,
+            "Evening kickoff ET": 0.033144136868385105,
+            "Thursday": -0.014454460491448507,
+            "Monday": -0.012535635375263917,
+            "Saturday": -0.017431600666306554
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 187,
+            "objective": 0.6318033751673215,
+            "gradient_norm": 9.902929485900575e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22288334240281832,
+            "log_loss": 0.6390389788052079,
+            "accuracy": 0.6282527881040892,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.07158793145338666,
+            "Permanent dome": -0.014065057559979721,
+            "Retractable roof": -0.08717197399726961,
+            "Outdoor stadium": 0.022995640139601762,
+            "Early kickoff ET": -0.031648293568091956,
+            "Evening kickoff ET": 0.02483147326281045,
+            "Thursday": -0.020343945434629706,
+            "Monday": -0.012961455992487301,
+            "Saturday": -0.0043544282364983145
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 186,
+            "objective": 0.6331038550721738,
+            "gradient_norm": 9.542798372515204e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.23415248316002274,
+            "log_loss": 0.6614324709870136,
+            "accuracy": 0.5919117647058824,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.0740205705616473,
+            "Permanent dome": -0.03481134631017322,
+            "Retractable roof": -0.05865366786161686,
+            "Outdoor stadium": 0.012566928654143763,
+            "Early kickoff ET": -0.025336027349773166,
+            "Evening kickoff ET": 0.010976703365503172,
+            "Thursday": -0.0167798130717406,
+            "Monday": -0.027510645878043794,
+            "Saturday": -0.0038648847375772604
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 188,
+            "objective": 0.6396493126296998,
+            "gradient_norm": 9.91073934955046e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.20992405968076808,
+            "log_loss": 0.6090562498139411,
+            "accuracy": 0.6801470588235294,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.08371630223028378,
+            "Permanent dome": -0.02033819439757947,
+            "Retractable roof": -0.055700787653518706,
+            "Outdoor stadium": -0.014513043812689488,
+            "Early kickoff ET": -0.04222396096379314,
+            "Evening kickoff ET": 0.015674797794868144,
+            "Thursday": -0.01575833161622024,
+            "Monday": -0.03667521063170204,
+            "Saturday": 0.010079397254647937
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 193,
+            "objective": 0.6353540497804123,
+            "gradient_norm": 9.504317367804369e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22251692737037315,
+            "log_loss": 0.638257909242868,
+            "accuracy": 0.6457564575645757,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.2636683029746318,
+            "log_loss": 0.7321838513093206,
+            "accuracy": 0.5238095238095238,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22425336225231302,
+            "log_loss": 0.6401121444971323,
+            "accuracy": 0.6,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.0006074141630181127,
+          "interval_95": [
+            -0.001681072296400418,
+            0.0004346515834459778
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0008466288841256068,
+          "interval_95": [
+            -0.0032207689555545003,
+            0.0015079962988533411
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 28,
+        "new_errors": 24,
+        "net_correct_picks": 4,
+        "accuracy_delta": 0.002952029520295203,
+        "interval_95": [
+          -0.005961251862891207,
+          0.011922503725782414
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "Team efficiency": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.2240713800909264,
+        "log_loss": 0.6404135461037787,
+        "accuracy": 0.6243542435424354,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Offense: Net passing yards/dropback": 0.0,
+            "Offense: Passing first downs/dropback": 0.0,
+            "Offense: Sacks/dropback": 0.0,
+            "Offense: Rushing first downs/carry": 0.0,
+            "Offense: Turnovers/play": 0.0,
+            "Offense: EPA/play": 0.0,
+            "Defense: Net passing yards/dropback": 0.0,
+            "Defense: Passing first downs/dropback": 0.0,
+            "Defense: Sacks/dropback": 0.0,
+            "Defense: Rushing first downs/carry": 0.015116006745840306,
+            "Defense: Turnovers/play": 0.0019452789369933626,
+            "Defense: EPA/play": -0.048298998611923036
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 188,
+            "objective": 0.6261679057877046,
+            "gradient_norm": 9.476469773001331e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.230867531214379,
+            "log_loss": 0.6562414561613616,
+            "accuracy": 0.5940959409594095,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Offense: Net passing yards/dropback": 0.0,
+            "Offense: Passing first downs/dropback": 0.0,
+            "Offense: Sacks/dropback": 0.0,
+            "Offense: Rushing first downs/carry": 0.0,
+            "Offense: Turnovers/play": 0.0,
+            "Offense: EPA/play": 0.0,
+            "Defense: Net passing yards/dropback": 0.0,
+            "Defense: Passing first downs/dropback": 0.0,
+            "Defense: Sacks/dropback": 0.0,
+            "Defense: Rushing first downs/carry": 0.02074286661732326,
+            "Defense: Turnovers/play": 0.008475019470393558,
+            "Defense: EPA/play": -0.061824473301330576
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 193,
+            "objective": 0.6325680622352918,
+            "gradient_norm": 9.770688110238152e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22234187805524555,
+            "log_loss": 0.6374938668840704,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Offense: Net passing yards/dropback": 0.0,
+            "Offense: Passing first downs/dropback": 0.0,
+            "Offense: Sacks/dropback": 0.0,
+            "Offense: Rushing first downs/carry": 0.0,
+            "Offense: Turnovers/play": 0.0,
+            "Offense: EPA/play": 0.0,
+            "Defense: Net passing yards/dropback": 0.0,
+            "Defense: Passing first downs/dropback": 0.0,
+            "Defense: Sacks/dropback": 0.0,
+            "Defense: Rushing first downs/carry": 0.013676722863863885,
+            "Defense: Turnovers/play": 0.028915478326045324,
+            "Defense: EPA/play": -0.09026335319790195
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 193,
+            "objective": 0.6326953211194766,
+            "gradient_norm": 9.720724665398389e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.23391473051372497,
+            "log_loss": 0.6608828529960336,
+            "accuracy": 0.5882352941176471,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Offense: Net passing yards/dropback": 0.0,
+            "Offense: Passing first downs/dropback": 0.0,
+            "Offense: Sacks/dropback": 0.0,
+            "Offense: Rushing first downs/carry": 0.0,
+            "Offense: Turnovers/play": 0.0,
+            "Offense: EPA/play": 0.0,
+            "Defense: Net passing yards/dropback": 0.0,
+            "Defense: Passing first downs/dropback": 0.0,
+            "Defense: Sacks/dropback": 0.0,
+            "Defense: Rushing first downs/carry": 0.012061564984607155,
+            "Defense: Turnovers/play": 0.027200881955996525,
+            "Defense: EPA/play": -0.06150045516107858
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 190,
+            "objective": 0.6394624199024659,
+            "gradient_norm": 9.617893018858473e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.21014229358529865,
+            "log_loss": 0.6090102111452953,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Offense: Net passing yards/dropback": 0.0,
+            "Offense: Passing first downs/dropback": 0.0,
+            "Offense: Sacks/dropback": 0.0,
+            "Offense: Rushing first downs/carry": 0.0,
+            "Offense: Turnovers/play": 0.0,
+            "Offense: EPA/play": 0.0,
+            "Defense: Net passing yards/dropback": 0.0,
+            "Defense: Passing first downs/dropback": 0.0,
+            "Defense: Sacks/dropback": 0.0,
+            "Defense: Rushing first downs/carry": 0.02756037693344135,
+            "Defense: Turnovers/play": 0.04690436187349492,
+            "Defense: EPA/play": -0.06961259519985066
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 191,
+            "objective": 0.635247461615195,
+            "gradient_norm": 9.901936489243451e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22308410862261724,
+            "log_loss": 0.638428609217349,
+            "accuracy": 0.6383763837638377,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.2642209059815411,
+            "log_loss": 0.7329957071889387,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22384584975630895,
+            "log_loss": 0.638631917240135,
+            "accuracy": 0.5882352941176471,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -4.9214302567151116e-05,
+          "interval_95": [
+            -0.0003510519554608213,
+            0.0002746544017653311
+          ]
+        },
+        "log_loss": {
+          "delta": -0.00020654460333011066,
+          "interval_95": [
+            -0.000925635572793207,
+            0.0005508649146127116
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 5,
+        "new_errors": 8,
+        "net_correct_picks": -3,
+        "accuracy_delta": -0.002214022140221402,
+        "interval_95": [
+          -0.007352941176470588,
+          0.002962962962962963
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    },
+    "Schedule + efficiency": {
+      "metrics": {
+        "games": 1359,
+        "brier": 0.222625154556655,
+        "log_loss": 0.6379510701881581,
+        "accuracy": 0.6376383763837639,
+        "ties": 4
+      },
+      "by_season": [
+        {
+          "season": 2021,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020
+          ],
+          "weights": {
+            "Home field": -0.0583469237847484,
+            "Permanent dome": -0.03449524447435216,
+            "Retractable roof": -0.054383039763258395,
+            "Outdoor stadium": 0.020405962540800043,
+            "Early kickoff ET": -0.033453412788608174,
+            "Evening kickoff ET": 0.027428613017560752,
+            "Thursday": -0.005919148920200772,
+            "Monday": -0.029945908791401563,
+            "Saturday": -0.01886590325292844,
+            "Offense: Net passing yards/dropback": 0.014728902125263194,
+            "Offense: Passing first downs/dropback": 0.002269471858976606,
+            "Offense: Sacks/dropback": -0.04894285836844739,
+            "Offense: Rushing first downs/carry": 0.10017881190743205,
+            "Offense: Turnovers/play": -0.045394693780271084,
+            "Offense: EPA/play": 0.06195530843283292,
+            "Defense: Net passing yards/dropback": 0.011184728490522999,
+            "Defense: Passing first downs/dropback": 0.0010963970392832995,
+            "Defense: Sacks/dropback": -0.010449460066838827,
+            "Defense: Rushing first downs/carry": 0.02270566737206277,
+            "Defense: Turnovers/play": 0.05300682520705851,
+            "Defense: EPA/play": -0.037829477539828335
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 193,
+            "objective": 0.6249265199428234,
+            "gradient_norm": 9.865465622031777e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2309785300082042,
+            "log_loss": 0.656744517114303,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22775881240940274,
+            "log_loss": 0.6506551910572639,
+            "accuracy": 0.6014760147601476,
+            "ties": 1
+          }
+        },
+        {
+          "season": 2022,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021
+          ],
+          "weights": {
+            "Home field": -0.07730924960350344,
+            "Permanent dome": -0.031286036264032126,
+            "Retractable roof": -0.08145885112514152,
+            "Outdoor stadium": 0.02741511633316176,
+            "Early kickoff ET": -0.053041863914092525,
+            "Evening kickoff ET": 0.033351421304922906,
+            "Thursday": -0.014583692277751595,
+            "Monday": -0.012250862414840101,
+            "Saturday": -0.018094972940901993,
+            "Offense: Net passing yards/dropback": 0.020305242833513627,
+            "Offense: Passing first downs/dropback": 0.008550205288313897,
+            "Offense: Sacks/dropback": -0.06237222335878058,
+            "Offense: Rushing first downs/carry": 0.07883549029959099,
+            "Offense: Turnovers/play": -0.005459167818695908,
+            "Offense: EPA/play": 0.0528742432251781,
+            "Defense: Net passing yards/dropback": 0.008392667715257086,
+            "Defense: Passing first downs/dropback": 0.003936726192443612,
+            "Defense: Sacks/dropback": -0.006409418570585392,
+            "Defense: Rushing first downs/carry": 0.00975154828601771,
+            "Defense: Turnovers/play": 0.042500221216364376,
+            "Defense: EPA/play": -0.05314281898729745
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 190,
+            "objective": 0.6302980984651372,
+            "gradient_norm": 9.642441986708328e-08
+          },
+          "baseline": {
+            "games": 271,
+            "brier": 0.22294879241436197,
+            "log_loss": 0.6387845992895343,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          },
+          "candidate": {
+            "games": 271,
+            "brier": 0.22047521005399248,
+            "log_loss": 0.6336846723955268,
+            "accuracy": 0.6245353159851301,
+            "ties": 2
+          }
+        },
+        {
+          "season": 2023,
+          "training_seasons": [
+            2017,
+            2018,
+            2019,
+            2020,
+            2021,
+            2022
+          ],
+          "weights": {
+            "Home field": -0.07154831215287251,
+            "Permanent dome": -0.017259140399816096,
+            "Retractable roof": -0.09060896572591633,
+            "Outdoor stadium": 0.02970022191330664,
+            "Early kickoff ET": -0.03150886915153871,
+            "Evening kickoff ET": 0.024819954491176698,
+            "Thursday": -0.019559794467621492,
+            "Monday": -0.013462583832907375,
+            "Saturday": -0.0050224652168719686,
+            "Offense: Net passing yards/dropback": 0.013494301160193794,
+            "Offense: Passing first downs/dropback": 0.028906254735373324,
+            "Offense: Sacks/dropback": -0.09003268251565044,
+            "Offense: Rushing first downs/carry": 0.07814755283544157,
+            "Offense: Turnovers/play": 5.83912501143567e-05,
+            "Offense: EPA/play": 0.06305865340887495,
+            "Defense: Net passing yards/dropback": -0.009158947984236701,
+            "Defense: Passing first downs/dropback": -0.015869363960705356,
+            "Defense: Sacks/dropback": 0.0014537141950842368,
+            "Defense: Rushing first downs/carry": 0.01295350412753708,
+            "Defense: Turnovers/play": 0.030134064443256156,
+            "Defense: EPA/play": -0.06592330154838186
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 187,
+            "objective": 0.6308970580369901,
+            "gradient_norm": 9.858904631912524e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.23374473581903735,
+            "log_loss": 0.6605817366764121,
+            "accuracy": 0.5955882352941176,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.23427877371692732,
+            "log_loss": 0.6621167731519426,
+            "accuracy": 0.6213235294117647,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2024,
+          "training_seasons": [
+            2018,
+            2019,
+            2020,
+            2021,
+            2022,
+            2023
+          ],
+          "weights": {
+            "Home field": -0.07436936121252591,
+            "Permanent dome": -0.03790753633900285,
+            "Retractable roof": -0.062645866726542,
+            "Outdoor stadium": 0.019338724415477657,
+            "Early kickoff ET": -0.02561165496641995,
+            "Evening kickoff ET": 0.0103851728068724,
+            "Thursday": -0.0163096107432471,
+            "Monday": -0.02893462840193695,
+            "Saturday": -0.004151164406974699,
+            "Offense: Net passing yards/dropback": 0.011438085456278342,
+            "Offense: Passing first downs/dropback": 0.02705659836261054,
+            "Offense: Sacks/dropback": -0.0621002419471266,
+            "Offense: Rushing first downs/carry": 0.07001218224476691,
+            "Offense: Turnovers/play": 0.005670988990363136,
+            "Offense: EPA/play": 0.06454110243276488,
+            "Defense: Net passing yards/dropback": -0.043221410736444046,
+            "Defense: Passing first downs/dropback": -0.03240566480220097,
+            "Defense: Sacks/dropback": 0.006541500287553247,
+            "Defense: Rushing first downs/carry": 0.0344575324471739,
+            "Defense: Turnovers/play": 0.005330598590182607,
+            "Defense: EPA/play": -0.055404778245460674
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 191,
+            "objective": 0.6377651711754944,
+            "gradient_norm": 9.742481550494009e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.21056624010323977,
+            "log_loss": 0.6098974882556807,
+            "accuracy": 0.6764705882352942,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.20611123413000373,
+            "log_loss": 0.6012385713441809,
+            "accuracy": 0.6985294117647058,
+            "ties": 0
+          }
+        },
+        {
+          "season": 2025,
+          "training_seasons": [
+            2019,
+            2020,
+            2021,
+            2022,
+            2023,
+            2024
+          ],
+          "weights": {
+            "Home field": -0.08465808300749844,
+            "Permanent dome": -0.023702069987009026,
+            "Retractable roof": -0.060686738658434124,
+            "Outdoor stadium": -0.00707697866937052,
+            "Early kickoff ET": -0.04117582631263132,
+            "Evening kickoff ET": 0.01513554769531222,
+            "Thursday": -0.015220612173476544,
+            "Monday": -0.03819287649429222,
+            "Saturday": 0.009442920867974009,
+            "Offense: Net passing yards/dropback": 0.025393577302980794,
+            "Offense: Passing first downs/dropback": 0.044552615127627745,
+            "Offense: Sacks/dropback": -0.06779767050524149,
+            "Offense: Rushing first downs/carry": 0.07054247520001154,
+            "Offense: Turnovers/play": 0.00952173074979609,
+            "Offense: EPA/play": 0.07777722915032935,
+            "Defense: Net passing yards/dropback": -0.04360772719134256,
+            "Defense: Passing first downs/dropback": -0.05281815474341928,
+            "Defense: Sacks/dropback": 0.008939921890784368,
+            "Defense: Rushing first downs/carry": 0.03654114437160611,
+            "Defense: Turnovers/play": 0.012251230935734258,
+            "Defense: EPA/play": -0.055302544754164594
+          },
+          "optimizer": {
+            "status": "converged",
+            "converged": true,
+            "iterations": 194,
+            "objective": 0.6327314055729261,
+            "gradient_norm": 9.948412348428914e-08
+          },
+          "baseline": {
+            "games": 272,
+            "brier": 0.2223603655271128,
+            "log_loss": 0.6370853640693983,
+            "accuracy": 0.6346863468634686,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 272,
+            "brier": 0.22449383826521818,
+            "log_loss": 0.6420444577058697,
+            "accuracy": 0.6420664206642066,
+            "ties": 1
+          }
+        }
+      ],
+      "by_team": {
+        "PIT": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.2645400322887116,
+            "log_loss": 0.7341769114479433,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.26647440279194384,
+            "log_loss": 0.7384963916258149,
+            "accuracy": 0.5119047619047619,
+            "ties": 1
+          }
+        },
+        "MIN": {
+          "baseline": {
+            "games": 85,
+            "brier": 0.22359978402900213,
+            "log_loss": 0.6382209106152721,
+            "accuracy": 0.6,
+            "ties": 0
+          },
+          "candidate": {
+            "games": 85,
+            "brier": 0.22441968640547777,
+            "log_loss": 0.6404162163238079,
+            "accuracy": 0.6235294117647059,
+            "ties": 0
+          }
+        }
+      },
+      "uncertainty": {
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000,
+        "blocks": 90,
+        "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+        "brier": {
+          "delta": -0.0014954398368385608,
+          "interval_95": [
+            -0.003106054826652252,
+            0.0001269654593648322
+          ]
+        },
+        "log_loss": {
+          "delta": -0.0026690205189506145,
+          "interval_95": [
+            -0.006273477452014004,
+            0.0010997873099641542
+          ]
+        }
+      },
+      "winner_picks": {
+        "decisive_games": 1355,
+        "corrected_picks": 48,
+        "new_errors": 33,
+        "net_correct_picks": 15,
+        "accuracy_delta": 0.01107011070110701,
+        "interval_95": [
+          -0.0022172949002217295,
+          0.024024024024024024
+        ],
+        "method": "Paired season/week block bootstrap",
+        "samples": 2000
+      }
+    }
+  }
+}

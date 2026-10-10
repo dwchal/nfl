@@ -1,0 +1,444 @@
+{
+  "source_sha256": "a06ca5f608332ba4936d5f13f8868d92bf423b9d8b88b3c2dba293162575cfac",
+  "protocol": "Each audited season is excluded from all fitting and deployment gates. Completed earlier games within that season update ratings.",
+  "caveat": "Retrospective development audit, not archived live forecasts. Historical provider revisions and research selection can affect results. Bootstrap intervals do not account for model-development selection.",
+  "folds": [
+    {
+      "season": 2018,
+      "active": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": false,
+      "selection_seasons": [
+        2012,
+        2013,
+        2014
+      ],
+      "gate_seasons": [
+        2015,
+        2016,
+        2017
+      ],
+      "baseline": {
+        "games": 256,
+        "brier": 0.21825949564405167,
+        "log_loss": 0.6291665043351691,
+        "accuracy": 0.6220472440944882,
+        "ties": 2
+      },
+      "candidate": {
+        "games": 256,
+        "brier": 0.21825949564405167,
+        "log_loss": 0.6291665043351691,
+        "accuracy": 0.6220472440944882,
+        "ties": 2
+      }
+    },
+    {
+      "season": 2019,
+      "active": {
+        "name": "Calibrated margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 0.980837132866777,
+        "rest_coefficient": 0.006733677773360689
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": true,
+      "selection_seasons": [
+        2013,
+        2014,
+        2015
+      ],
+      "gate_seasons": [
+        2016,
+        2017,
+        2018
+      ],
+      "baseline": {
+        "games": 256,
+        "brier": 0.22095589989627792,
+        "log_loss": 0.6360024216565165,
+        "accuracy": 0.6470588235294118,
+        "ties": 1
+      },
+      "candidate": {
+        "games": 256,
+        "brier": 0.22091238588550047,
+        "log_loss": 0.6357744221757473,
+        "accuracy": 0.6470588235294118,
+        "ties": 1
+      }
+    },
+    {
+      "season": 2020,
+      "active": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": false,
+      "selection_seasons": [
+        2014,
+        2015,
+        2016
+      ],
+      "gate_seasons": [
+        2017,
+        2018,
+        2019
+      ],
+      "baseline": {
+        "games": 256,
+        "brier": 0.21502279555197779,
+        "log_loss": 0.624935456520324,
+        "accuracy": 0.6705882352941176,
+        "ties": 1
+      },
+      "candidate": {
+        "games": 256,
+        "brier": 0.21502279555197779,
+        "log_loss": 0.624935456520324,
+        "accuracy": 0.6705882352941176,
+        "ties": 1
+      }
+    },
+    {
+      "season": 2021,
+      "active": {
+        "name": "Calibrated margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 0.9296740087367137,
+        "rest_coefficient": 0.1395071932775102
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": true,
+      "selection_seasons": [
+        2015,
+        2016,
+        2017
+      ],
+      "gate_seasons": [
+        2018,
+        2019,
+        2020
+      ],
+      "baseline": {
+        "games": 272,
+        "brier": 0.23209966317396316,
+        "log_loss": 0.6603409648675056,
+        "accuracy": 0.6014760147601476,
+        "ties": 1
+      },
+      "candidate": {
+        "games": 272,
+        "brier": 0.2309785300082042,
+        "log_loss": 0.656744517114303,
+        "accuracy": 0.6014760147601476,
+        "ties": 1
+      }
+    },
+    {
+      "season": 2022,
+      "active": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": false,
+      "selection_seasons": [
+        2016,
+        2017,
+        2018
+      ],
+      "gate_seasons": [
+        2019,
+        2020,
+        2021
+      ],
+      "baseline": {
+        "games": 271,
+        "brier": 0.22294879241436197,
+        "log_loss": 0.6387845992895343,
+        "accuracy": 0.6245353159851301,
+        "ties": 2
+      },
+      "candidate": {
+        "games": 271,
+        "brier": 0.22294879241436197,
+        "log_loss": 0.6387845992895343,
+        "accuracy": 0.6245353159851301,
+        "ties": 2
+      }
+    },
+    {
+      "season": 2023,
+      "active": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 55.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": false,
+      "selection_seasons": [
+        2017,
+        2018,
+        2019
+      ],
+      "gate_seasons": [
+        2020,
+        2021,
+        2022
+      ],
+      "baseline": {
+        "games": 272,
+        "brier": 0.23374473581903735,
+        "log_loss": 0.6605817366764121,
+        "accuracy": 0.5955882352941176,
+        "ties": 0
+      },
+      "candidate": {
+        "games": 272,
+        "brier": 0.23374473581903735,
+        "log_loss": 0.6605817366764121,
+        "accuracy": 0.5955882352941176,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2024,
+      "active": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 35.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 35.0,
+        "carryover": 0.5,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": false,
+      "selection_seasons": [
+        2018,
+        2019,
+        2020
+      ],
+      "gate_seasons": [
+        2021,
+        2022,
+        2023
+      ],
+      "baseline": {
+        "games": 272,
+        "brier": 0.21056624010323977,
+        "log_loss": 0.6098974882556807,
+        "accuracy": 0.6764705882352942,
+        "ties": 0
+      },
+      "candidate": {
+        "games": 272,
+        "brier": 0.21056624010323977,
+        "log_loss": 0.6098974882556807,
+        "accuracy": 0.6764705882352942,
+        "ties": 0
+      }
+    },
+    {
+      "season": 2025,
+      "active": {
+        "name": "Calibrated margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 35.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 0.9174291281440882,
+        "rest_coefficient": 0.02760075050291784
+      },
+      "incumbent": {
+        "name": "Margin-aware Elo",
+        "k_factor": 20.0,
+        "home_advantage": 35.0,
+        "carryover": 0.6666666666666666,
+        "use_margin": true,
+        "probability_scale": 1.0,
+        "rest_coefficient": 0.0
+      },
+      "calibration_promoted": true,
+      "selection_seasons": [
+        2019,
+        2020,
+        2021
+      ],
+      "gate_seasons": [
+        2022,
+        2023,
+        2024
+      ],
+      "baseline": {
+        "games": 272,
+        "brier": 0.2226561328464915,
+        "log_loss": 0.6380072464668424,
+        "accuracy": 0.6346863468634686,
+        "ties": 1
+      },
+      "candidate": {
+        "games": 272,
+        "brier": 0.2223603655271128,
+        "log_loss": 0.6370853640693983,
+        "accuracy": 0.6346863468634686,
+        "ties": 1
+      }
+    }
+  ],
+  "skipped": [],
+  "baseline": {
+    "games": 2127,
+    "brier": 0.22212048031610052,
+    "log_loss": 0.6373758396779553,
+    "accuracy": 0.6337895233600755,
+    "ties": 8
+  },
+  "candidate": {
+    "games": 2127,
+    "brier": 0.2219340503590171,
+    "log_loss": 0.6367705958283763,
+    "accuracy": 0.6337895233600755,
+    "ties": 8
+  },
+  "uncertainty": {
+    "method": "Paired season/week block bootstrap",
+    "samples": 2000,
+    "blocks": 141,
+    "direction": "Negative candidate-minus-baseline deltas favor candidate.",
+    "brier": {
+      "delta": -0.00018642995708343638,
+      "interval_95": [
+        -0.00045266069540433554,
+        5.353055293405962e-05
+      ]
+    },
+    "log_loss": {
+      "delta": -0.0006052438495783083,
+      "interval_95": [
+        -0.0013592490964201708,
+        9.474112313063035e-05
+      ]
+    }
+  },
+  "by_team": {
+    "PIT": {
+      "baseline": {
+        "games": 133,
+        "brier": 0.2534962984285218,
+        "log_loss": 0.7124303190465578,
+        "accuracy": 0.549618320610687,
+        "ties": 2
+      },
+      "candidate": {
+        "games": 133,
+        "brier": 0.2527156713517374,
+        "log_loss": 0.7103711866146356,
+        "accuracy": 0.5419847328244275,
+        "ties": 2
+      }
+    },
+    "MIN": {
+      "baseline": {
+        "games": 133,
+        "brier": 0.22097732515760332,
+        "log_loss": 0.6367577718273054,
+        "accuracy": 0.6212121212121212,
+        "ties": 1
+      },
+      "candidate": {
+        "games": 133,
+        "brier": 0.22045536383529396,
+        "log_loss": 0.6355613621047786,
+        "accuracy": 0.6212121212121212,
+        "ties": 1
+      }
+    }
+  }
+}
