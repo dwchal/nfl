@@ -105,4 +105,9 @@ Only Python’s standard library is used. The frontend is plain HTML/CSS/JavaScr
 
 ## Repository layout
 
+For a code review and nine prioritized improvement plans, see the
+[model improvement implementation guide](docs/model-improvement-plan.md).
+It includes specific code findings, ordered implementation steps, test cases,
+data requirements, and evaluation gates for each proposal.
+
 `app.py` serves the local interface; `steelers/data.py` downloads and validates schedules; `steelers/model.py` tunes/calibrates Elo; `steelers/evaluation.py` audits the full selection policy; `steelers/features.py` loads weekly statistics; `steelers/matchup.py` fits/evaluates the QB challenger; `steelers/advanced.py` evaluates the advanced model; `steelers/pbp.py`, `steelers/evidence.py`, and `steelers/travel.py` prepare its inputs; `steelers/weather.py` loads weather forecasts; `steelers/forecast.py` archives pre-kickoff predictions; `steelers/analysis.py` calculates statistics and projections; `static/` contains the interface; `tests/` verifies calculations, future-result isolation, offline fallback, and HTTP endpoints. The original R/Shiny/Quarto project is retained under `legacy/r/` for reference and is not needed to run the Python app.
