@@ -1,6 +1,8 @@
 # Shared chronological model evaluation
 
 Implemented as item 3 of the [model improvement guide](model-improvement-plan.md).
+Protocol `chronological-v2` ([reduced models and blend](reduced-model.md)) extends
+this runner; v1 configurations still run and reproduce this report's forecasts.
 The [experiment configuration](experiments/chronological.json) declares the
 candidate order, penalties, seasons, coverage thresholds, cutoff, selection
 gate, and bootstrap settings. The [full report](chronological-evaluation.json)

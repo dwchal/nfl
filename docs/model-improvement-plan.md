@@ -3,11 +3,13 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Items 1–4 have been implemented as recorded below in the
+documentation only. Items 1–4 and 6 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
 [input-quality record](#item-2-implementation-record) and
 [chronological evaluation record](#item-3-implementation-record) and
-[prospective collection record](#item-4-implementation-record); items 5–9 remain proposed.
+[prospective collection record](#item-4-implementation-record) and
+[reduced-model record](#item-6-implementation-record); items 5 and 7–9 remain
+proposed, along with item 6's deferred recency experiment.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -997,6 +999,49 @@ integration tests. Git whitespace and JavaScript syntax checks pass. The
 [collection verification](forecast-collection-verification.json) records a real
 offline capture and its horizon coverage. All 45 probabilities and feature
 digests reproduce exactly from the saved immutable inputs and artifacts.
+
+The next planned priority is item 5: model quarterback uncertainty and rushing
+contribution.
+
+## Item 6 implementation record
+
+`steelers/advanced.py` now carries a label-based feature registry and four
+declared groups (`full`, `qb_weekly_travel`, `qb_situational_travel`,
+`travel`); the reduced groups omit the rest coefficient that calibrated Elo
+already supplies. `steelers/experiments.py` accepts protocol
+`chronological-v2`: advanced candidates may name a group, support gates still
+apply, and an optional blend `p = (1 − α)·p_elo + α·p_selected` is chosen on the
+inner-fold predictions only, preferring smaller α and requiring both scores to
+beat α = 0. α = 0 is exactly Elo and α = 1 exactly the correction. Fits report
+active labels, training rows, clipping rates at the ±4 bound, active
+coefficient counts and optimizer status. v1 configurations still validate and
+reproduce the [v1 report](chronological-evaluation.json) game for game.
+
+The [experiment](experiments/reduced.json) compares the four groups at L2
+penalties 0.03, 0.1 and 0.3 with Elo on the same 1,359 games from 2021–2025;
+[results](reduced-model.md) and the [full report](reduced-evaluation.json)
+are checked in. No reduced model beats the full model at the same penalty; the
+best pooled candidate is full at 0.03 (Brier 0.221880 versus 0.224121), the
+22-feature situational group is within 0.00002 of it, and the penalty matters
+more than the group. Heavier shrinkage (0.3) gives smaller gains whose
+intervals exclude zero; lighter shrinkage gives larger but less stable gains.
+The inner-selected policy scores 0.223320 and the blended policy 0.223603,
+because every correction model worsens 2025 and the blend chooses α = 1 in all
+selected years but 2024. The 2025 snapshots have full coverage; corrections
+are simply more confident in a season that punished confidence. Nothing is
+promoted; the application default and the experimental selector are unchanged.
+Step 5 (recency and count-prior grids) is deferred to its own change.
+
+New tests check registry resolution and width, that an unknown or mismatched
+group fails, that the `full` group reproduces the v1 advanced candidate exactly,
+that a declared group only removes coefficients, that blend endpoints are exact
+and chosen on inner predictions alone, that outer outcomes cannot move the
+blend or the selection, and the v2 configuration validation rules.
+
+**Validation.** All 151 tests pass on Python 3.14.2. Two independent local CLI
+runs produce byte-identical reports; the v1 configuration under the v2 runner
+reproduces every checked-in 2021–2025 forecast. No downloads or forecast
+captures are needed.
 
 The next planned priority is item 5: model quarterback uncertainty and rushing
 contribution.

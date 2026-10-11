@@ -167,7 +167,10 @@ compare Elo, QB matchup, and advanced on the same 1,359 games from 2021–2025.
 For each outer season, candidates fit only earlier seasons and selection uses
 the last two earlier complete seasons. The runner records per-game forecasts,
 exact settings, coverage fallbacks, and source hashes in the
-[full report](docs/chronological-evaluation.json).
+[full report](docs/chronological-evaluation.json). A second experiment,
+[reduced correction models and an Elo blend](docs/reduced-model.md), compares
+four feature groups at three penalties under the same protocol; none is
+promoted, and the application default stays Elo.
 
 ```sh
 python3 -m steelers.experiments --data .cache/games.csv \

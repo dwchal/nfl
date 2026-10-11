@@ -23,6 +23,30 @@ LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offens
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")
 WEATHER_START = 6 + 2 * len(pbp.LABELS) + len(travel.LABELS)
 AVAILABILITY_START = WEATHER_START + 3
+assert len(LABELS) == AVAILABILITY_START + 4 and len(set(LABELS)) == len(LABELS), "Advanced label layout changed"
+
+# Versioned name-to-index registry. Experiments declare feature groups by label
+# so an old weight vector is never reinterpreted under a changed layout.
+REGISTRY = {label: index for index, label in enumerate(LABELS)}
+SITUATIONAL_LABELS = tuple(LABELS[6:6 + 2 * len(pbp.LABELS)])
+FEATURE_GROUPS = {
+    "full": LABELS,
+    # Reduced groups omit the extra rest coefficient: calibrated Elo supplies it.
+    "qb_weekly_travel": ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense",
+                         "Quarterback change") + travel.LABELS,
+    "qb_situational_travel": ("Quarterback change",) + SITUATIONAL_LABELS + travel.LABELS,
+    "travel": travel.LABELS,
+}
+
+
+def group_indices(name):
+    """Resolve a declared feature group to registry indices; unknown labels fail loudly."""
+    if name not in FEATURE_GROUPS:
+        raise ValueError(f"Unknown feature group: {name}")
+    labels = FEATURE_GROUPS[name]
+    if len(set(labels)) != len(labels) or any(label not in REGISTRY for label in labels):
+        raise ValueError(f"Feature group {name} does not match the advanced label registry")
+    return tuple(REGISTRY[label] for label in labels)
 
 
 class Situations:

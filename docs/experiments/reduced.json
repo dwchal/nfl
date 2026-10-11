@@ -1,0 +1,30 @@
+{
+  "version": "chronological-v2",
+  "history_start": 2016,
+  "evaluation_seasons": [2021, 2022, 2023, 2024, 2025],
+  "cutoff_policy": "kickoff_previous_day",
+  "inner_seasons": 2,
+  "min_training_seasons": 3,
+  "max_training_seasons": 6,
+  "minimum_games": 200,
+  "minimum_coverage": 0.95,
+  "bootstrap_samples": 2000,
+  "seed": 42,
+  "gate": "both_probability_scores",
+  "blend": {"alphas": [0, 0.25, 0.5, 0.75, 1]},
+  "candidates": [
+    {"id": "elo", "family": "elo"},
+    {"id": "travel-0.3", "family": "advanced", "features": "travel", "penalty": 0.3},
+    {"id": "travel-0.1", "family": "advanced", "features": "travel", "penalty": 0.1},
+    {"id": "travel-0.03", "family": "advanced", "features": "travel", "penalty": 0.03},
+    {"id": "qb-weekly-travel-0.3", "family": "advanced", "features": "qb_weekly_travel", "penalty": 0.3},
+    {"id": "qb-weekly-travel-0.1", "family": "advanced", "features": "qb_weekly_travel", "penalty": 0.1},
+    {"id": "qb-weekly-travel-0.03", "family": "advanced", "features": "qb_weekly_travel", "penalty": 0.03},
+    {"id": "qb-situational-travel-0.3", "family": "advanced", "features": "qb_situational_travel", "penalty": 0.3},
+    {"id": "qb-situational-travel-0.1", "family": "advanced", "features": "qb_situational_travel", "penalty": 0.1},
+    {"id": "qb-situational-travel-0.03", "family": "advanced", "features": "qb_situational_travel", "penalty": 0.03},
+    {"id": "full-0.3", "family": "advanced", "features": "full", "penalty": 0.3},
+    {"id": "full-0.1", "family": "advanced", "features": "full", "penalty": 0.1},
+    {"id": "full-0.03", "family": "advanced", "features": "full", "penalty": 0.03}
+  ]
+}
