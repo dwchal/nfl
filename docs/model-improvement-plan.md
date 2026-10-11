@@ -7,7 +7,7 @@ documentation only. Items 1–4 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
 [input-quality record](#item-2-implementation-record) and
 [chronological evaluation record](#item-3-implementation-record) and
-[prospective collection record](#item-4-implementation-record); items 5–9 remain proposed.
+[prospective collection record](#item-4-implementation-record); items 5, 6 and 9 now have partial implementations recorded in the [four-part follow-up](model-research-round-2.md); items 7 and 8 remain proposed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -1000,3 +1000,14 @@ digests reproduce exactly from the saved immutable inputs and artifacts.
 
 The next planned priority is item 5: model quarterback uncertainty and rushing
 contribution.
+
+## 2026-10-11 follow-up: items 5, 6 and 9
+
+The [four-part implementation and results](model-research-round-2.md) records
+the production starter-evidence correction, a separate QB rushing experiment,
+the season/playoff projection audit, and reduced-feature/penalty comparisons.
+All requested experiments have run on the local historical inputs. The current
+default remains Elo. Item 5 starter mixtures, item 6 decay/prior searches, and
+item 9 margin/latent-strength variants remain proposed; the record does not
+claim those broader roadmap items are fully complete. Historical reports above
+remain preserved.

@@ -22,9 +22,10 @@ from .evaluation import paired_uncertainty
 from .evidence import Evidence, timestamp
 from .features import VERSION as WEEKLY_VERSION, parse_feature_csv
 from .forecast import kickoff_utc
-from .matchup import corrected, fit_correction, replay
+from .matchup import LABELS as MATCHUP_LABELS, corrected, fit_correction, replay
 from .model import ModelConfig, chronological_forecasts, metrics, reliability_bins
 from .pbp import validate as validate_pbp
+from .qb_rushing import RushingState, LABELS as RUSHING_LABELS, validate as validate_rushing
 
 VERSION = "chronological-v1"
 CUTOFF_POLICY = "Kickoff; weekly/PBP observations from earlier calendar days only."
@@ -39,7 +40,7 @@ def validate_config(config):
     required = {"version", "history_start", "evaluation_seasons", "cutoff_policy", "inner_seasons", "min_training_seasons",
                 "max_training_seasons", "minimum_games", "minimum_coverage",
                 "bootstrap_samples", "seed", "gate", "candidates"}
-    if set(config) != required:
+    if set(config) not in (required, required | {"comparisons"}):
         raise ValueError("Experiment config must contain exactly: " + ", ".join(sorted(required)))
     fixed = {"version": VERSION, "cutoff_policy": "kickoff_previous_day", "inner_seasons": 2, "min_training_seasons": 3,
              "max_training_seasons": 6, "minimum_games": MIN_GAMES,
@@ -59,20 +60,31 @@ def validate_config(config):
     seen = set()
     for candidate in candidates:
         family, identifier = candidate.get("family"), candidate.get("id")
-        if family not in {"elo", "matchup", "advanced"} or not isinstance(identifier, str) or not identifier:
+        if family not in {"elo", "matchup", "advanced", "qb_rushing"} or not isinstance(identifier, str) or not identifier:
             raise ValueError("Invalid candidate family or identifier")
         if identifier in seen or (family == "elo" and identifier != "elo"):
             raise ValueError("Candidate identifiers must be unique; Elo is listed once")
         seen.add(identifier)
-        if set(candidate) != ({"id", "family"} if family == "elo" else {"id", "family", "penalty"}):
+        expected = {"id", "family"} if family == "elo" else {"id", "family", "penalty"}
+        if set(candidate) not in (expected, expected | {"indices"}) or family == "elo" and "indices" in candidate:
             raise ValueError("Invalid candidate settings")
+        if "indices" in candidate:
+            indices = candidate["indices"]
+            width = len(ADVANCED_LABELS) if family == "advanced" else 7 if family == "qb_rushing" else 6
+            if not isinstance(indices, list) or not indices or any(type(i) is not int or not 0 <= i < width for i in indices) or indices != sorted(set(indices)):
+                raise ValueError("Feature indices must be sorted, unique, nonempty and within the candidate width")
         if family != "elo" and (type(candidate["penalty"]) not in (int, float)
                                 or not math.isfinite(candidate["penalty"]) or candidate["penalty"] <= 0):
             raise ValueError("Correction penalties must be finite and positive")
+    if not isinstance(config.get("comparisons", []), list):
+        raise ValueError("Comparisons must be a list of candidate pairs")
+    for pair in config.get("comparisons", []):
+        if not isinstance(pair, list) or len(pair) != 2 or pair[0] == pair[1] or any(p not in seen for p in pair):
+            raise ValueError("Comparisons must name two different declared candidates")
     return config
 
 
-def load_inputs(schedule, features, advanced, history_start, end):
+def load_inputs(schedule, features, advanced, history_start, end, rushing=None):
     """Read immutable local snapshots, including SQLite through a read-only URI.
 
     Optional absent/invalid sources are recorded and left absent. The adapters
@@ -94,7 +106,7 @@ def load_inputs(schedule, features, advanced, history_start, end):
         raise ValueError("A local schedule is required")
     games = parse_games(raw.decode("utf-8-sig"))
     bundle = {"team": {}, "player": {}, "schema": WEEKLY_VERSION}
-    plays, evidence = {}, Evidence()
+    plays, rush, evidence = {}, {}, Evidence()
     for year in range(max(1999, history_start - 8), end + 1):
         for kind, prefix in (("team", "stats_team"), ("player", "stats_player")):
             filename = f"{prefix}_week_{year}.csv"
@@ -110,6 +122,14 @@ def load_inputs(schedule, features, advanced, history_start, end):
             if content is not None:
                 try:
                     plays.update(validate_pbp(json.loads(content), year)["games"])
+                except (ValueError, TypeError, KeyError) as error:
+                    sources[-1].update(status="invalid", reason=str(error))
+        if rushing is not None:
+            filename = f"qb_rushing_{year}.json"
+            content = read(rushing / filename, "qb-rushing/" + filename)
+            if content is not None:
+                try:
+                    rush.update(validate_rushing(json.loads(content), year)["games"])
                 except (ValueError, TypeError, KeyError) as error:
                     sources[-1].update(status="invalid", reason=str(error))
     if advanced is not None:
@@ -134,7 +154,7 @@ def load_inputs(schedule, features, advanced, history_start, end):
             sources.append({"file": "advanced/evidence.sqlite3", "sha256": None, "status": "missing"})
     code = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path(__file__).parent.glob("*.py"))}
     manifest = {"sources": sources, "code": code, "weekly_schema": WEEKLY_VERSION}
-    return games, bundle, {"plays": plays, "evidence": evidence}, manifest
+    return games, bundle, {"plays": plays, "qb_rushing": rush, "evidence": evidence}, manifest
 
 
 class ReplayRows:
@@ -160,7 +180,8 @@ class ReplayRows:
                 # Reconstruct at kickoff independently of the wall clock used
                 # by the live dashboard's min(kickoff, now) cutoff.
                 state = (AdvancedState(self.data.get("plays"), self.data.get("evidence"),
-                                       now=datetime.max.replace(tzinfo=timezone.utc)) if family == "advanced" else None)
+                                       now=datetime.max.replace(tzinfo=timezone.utc)) if family == "advanced" else
+                         RushingState(self.data.get("qb_rushing")) if family == "qb_rushing" else None)
                 rows, state, _ = replay([g for g in self.games if g.season <= year], year,
                                         ModelConfig(**self.configs[str(year)]), self.bundle, state)
                 self.cache[key] = [{**r, "elo_config": self.configs[str(year)]} for r in rows
@@ -192,13 +213,20 @@ class Adapter:
                   "coverage": {}, "optimizer": None, "support": None, "fallback_reason": None}
         weights = ()
         if self.family != "elo":
-            width = len(ADVANCED_LABELS) if self.family == "advanced" else 6
+            width = len(ADVANCED_LABELS) if self.family == "advanced" else 7 if self.family == "qb_rushing" else 6
+            report["feature_labels"] = list(ADVANCED_LABELS if self.family == "advanced" else RUSHING_LABELS if self.family == "qb_rushing" else MATCHUP_LABELS)
             weights = (0.,) * width
             eligible = []
             for year in previous_years:
-                coverage = training_coverage(self.replay.rows(self.family, year), [year], self.family == "advanced")
+                year_rows = self.replay.rows(self.family, year)
+                coverage = training_coverage(year_rows, [year], self.family == "advanced")
+                rushing_ok = True
+                if self.family == "qb_rushing":
+                    fraction = sum(r.get("qb_rushing_covered", False) for r in year_rows) / max(1, len(year_rows))
+                    coverage[str(year)]["qb_rushing_fraction"] = fraction
+                    rushing_ok = fraction >= self.protocol["minimum_coverage"]
                 report["coverage"].update(coverage)
-                if sufficient_history(coverage, self.family == "advanced"):
+                if sufficient_history(coverage, self.family == "advanced") and rushing_ok:
                     eligible.append(year)
                 else:
                     report["excluded_seasons"].append(year)
@@ -208,9 +236,11 @@ class Adapter:
                 report["fallback_reason"] = "Fewer than three complete earlier seasons satisfy source coverage."
             else:
                 train = [r for year in years for r in self.replay.rows(self.family, year)]
-                indices = tuple(range(width))
+                indices = tuple(self.candidate.get("indices", range(width)))
                 if self.family == "advanced":
-                    indices, report["support"] = enabled_indices(train, self.replay.contexts)
+                    supported, report["support"] = enabled_indices(train, self.replay.contexts)
+                    indices = tuple(i for i in indices if i in supported)
+                report["enabled_indices"] = list(indices)
                 weights, report["optimizer"] = fit_correction(train, indices, self.candidate["penalty"])
                 if not report["optimizer"]["converged"]:
                     report["fallback_reason"] = "Correction optimizer did not converge."
@@ -230,6 +260,8 @@ class Adapter:
                     reason = "No earlier weekly observations for one or both teams."
                 elif self.family == "advanced" and not all(t["pbp"]["games"] > 0 for t in teams):
                     reason = "No earlier PBP observations for one or both teams."
+                elif self.family == "qb_rushing" and not all(t["qb_rushing"]["games"] > 0 for t in teams):
+                    reason = "No earlier classified QB-rushing observations for one or both teams."
             probability = row["probability"]
             if self.family != "elo" and reason is None:
                 probability = corrected(probability, row["features"], fitted.weights)
@@ -243,7 +275,7 @@ def comparison(baseline, candidate, samples):
         return None
     availability = {}
     if any("input_coverage" in row for row in candidate):
-        for signal in ("weekly", "quarterback", "pbp", "weather", "availability"):
+        for signal in ("weekly", "quarterback", "pbp", "qb_rushing", "weather", "availability"):
             available, missing = [], []
             for row in candidate:
                 coverage = row.get("input_coverage", {})
@@ -360,6 +392,8 @@ def run(games, bundle, data, start, end, config, manifest=None):
     report["baseline"] = metrics(baseline)
     report["candidates"] = {key: comparison(baseline, rows, config["bootstrap_samples"]) for key, rows in pooled.items()}
     report["selected_policy"] = comparison(baseline, selected_rows, config["bootstrap_samples"])
+    report["comparisons"] = {f"{right}_vs_{left}": comparison(pooled[left], pooled[right], config["bootstrap_samples"])
+                             for left, right in config.get("comparisons", [])}
     return report
 
 
@@ -376,6 +410,7 @@ def main():
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--features", type=Path, required=True)
     parser.add_argument("--advanced", type=Path)
+    parser.add_argument("--rushing", type=Path)
     parser.add_argument("--start", type=int, required=True)
     parser.add_argument("--end", type=int, required=True)
     parser.add_argument("--config", type=Path, required=True)
@@ -385,9 +420,9 @@ def main():
     if args.start > args.end or any(year not in config["evaluation_seasons"] for year in range(args.start, args.end + 1)):
         parser.error("Require --start <= --end and seasons declared in the experiment config")
     if args.output.resolve() in {args.data.resolve(), args.config.resolve()} or any(
-            args.output.resolve().is_relative_to(p.resolve()) for p in (args.features, args.advanced) if p is not None):
+            args.output.resolve().is_relative_to(p.resolve()) for p in (args.features, args.advanced, args.rushing) if p is not None):
         parser.error("Output must not replace an input snapshot")
-    games, bundle, data, manifest = load_inputs(args.data, args.features, args.advanced, config["history_start"], args.end)
+    games, bundle, data, manifest = load_inputs(args.data, args.features, args.advanced, config["history_start"], args.end, args.rushing)
     manifest["experiment_file_sha256"] = hashlib.sha256(args.config.read_bytes()).hexdigest()
     report = run(games, bundle, data, args.start, args.end, config, manifest)
     args.output.parent.mkdir(parents=True, exist_ok=True)

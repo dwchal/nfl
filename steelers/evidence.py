@@ -202,19 +202,44 @@ class Evidence:
         rows = self.indexed.get((kind, key), [])
         candidates = [r for r in rows if timestamp(r["available_at"]) < cutoff
                       and (max_age is None or cutoff - timestamp(r["available_at"]) <= max_age)]
-        return candidates[-1] if candidates else None
+        return max(enumerate(candidates), key=lambda item: (timestamp(item[1]["available_at"]), item[0]))[1] if candidates else None
 
     def quarterback(self, game, team, fallback, cutoff):
-        confirmed = self.latest("confirmed_qb", f"{game.id}:{team_key(team)}", cutoff)
+        team = team_key(team)
+        confirmed = self.latest("confirmed_qb", f"{game.id}:{team}", cutoff)
+        depth = self.latest("depth", team, cutoff, timedelta(days=7))
+        # An omitted player in a later partial report does not reverse an Out.
+        reports = sorted((r for r in self.indexed.get(("availability", game.id), [])
+                          if cutoff is not None and timestamp(r["available_at"]) < cutoff
+                          and cutoff - timestamp(r["available_at"]) <= timedelta(days=7)),
+                         key=lambda r: timestamp(r["available_at"]))
+        unavailable = {}
+        for report in reports:
+            for player in report.get("players", []):
+                if team_key(player["team"]) != team or not player.get("id"):
+                    continue
+                if player.get("status", "").strip().lower() in {"out", "inactive"}:
+                    unavailable[player["id"]] = report["available_at"]
+                elif player.get("status", "").strip() and (player.get("source") or report.get("source")):
+                    unavailable.pop(player["id"], None)
+        conflicts = []
         if confirmed:
-            return confirmed
-        depth = self.latest("depth", team_key(team), cutoff, timedelta(days=7))
-        availability = self.latest("availability", game.id, cutoff, timedelta(days=7)) or {}
-        unavailable = {r["id"] for r in availability.get("players", []) if r["team"] == team_key(team) and r["status"].lower() in {"out", "inactive"}}
+            ruled_out = unavailable.get(confirmed["id"])
+            reversal = ruled_out and timestamp(confirmed["available_at"]) > timestamp(ruled_out) and confirmed.get("source")
+            if not ruled_out or reversal:
+                return {**confirmed, "membership_status": "Game-specific confirmation", "conflicts": []}
+            conflicts.append({"id": confirmed["id"], "confirmation_time": confirmed["available_at"],
+                              "unavailable_time": ruled_out, "reason": "Starter confirmation conflicts with an eligible Out/Inactive report."})
         if depth:
-            for player in depth["players"]:
+            for player in sorted(depth["players"], key=lambda p: (p.get("rank", 999), p["id"])):
                 if player["id"] not in unavailable:
-                    return {**player, "status": "Projected", "source": depth["source"], "available_at": depth["available_at"]}
+                    return {**player, "status": "Projected", "source": depth["source"], "available_at": depth["available_at"],
+                            "membership_status": "Timestamped team depth chart", "conflicts": conflicts}
+            return {"id": "", "name": "Unknown available starter", "status": "Unknown",
+                    "source": "No eligible depth-chart quarterback is available", "conflicts": conflicts}
         if fallback[0] in unavailable:
-            return {"id": "", "name": "Unknown available starter", "status": "Unknown", "source": "Previous passer ruled out"}
-        return {"id": fallback[0], "name": fallback[1] or "Unknown", "status": "Previous passer", "source": "Prior game statistics"}
+            return {"id": "", "name": "Unknown available starter", "status": "Unknown", "source": "Previous passer ruled out",
+                    "conflicts": conflicts}
+        return {"id": fallback[0], "name": fallback[1] or "Unknown", "status": "Previous passer" if fallback[0] else "Unknown",
+                "source": "Prior game statistics; current membership unverified", "membership_status": "Unverified",
+                "conflicts": conflicts}

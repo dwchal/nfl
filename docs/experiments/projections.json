@@ -1,0 +1,27 @@
+{
+  "version": "projection-audit-v1",
+  "seasons": [
+    2018,
+    2019,
+    2020,
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "weeks": [
+    1,
+    5,
+    9,
+    13
+  ],
+  "simulations": 5000,
+  "seed": 42,
+  "bootstrap_samples": 2000,
+  "model": "prior_selected_elo",
+  "cutoff_policy": "00:00 America/New_York on the first scheduled date of the checkpoint week",
+  "ties": "Known ties fixed; future ties not simulated",
+  "postseason": "Actual postseason field is used for labels only; never for simulation",
+  "schedule": "Reconstructed final historical fixtures; not an archived schedule vintage"
+}

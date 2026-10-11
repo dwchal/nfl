@@ -80,6 +80,19 @@ class PlayoffRace:
     def sample(self, outcomes, rng):
         if self.reason or self.observed is not None:
             return
+        champions, wildcards, random_tie = self.qualifiers(outcomes, rng)
+        if self.target in champions:
+            self.counts["division"] += 1
+        elif self.target in wildcards:
+            self.counts["wild_card"] += 1
+        else:
+            self.counts["miss"] += 1
+        self.fallback_samples += random_tie
+
+    def qualifiers(self, outcomes, rng):
+        """Return conference qualifiers once for a shared league simulation."""
+        if self.reason:
+            raise ValueError(self.reason)
         points = [row.copy() for row in self.base_points]
         for identifier, h, a in self.remaining:
             result = 2 * outcomes[identifier]
@@ -105,13 +118,7 @@ class PlayoffRace:
                 if ranked and ranked[0] == winner:
                     ranked.pop(0)
                     break
-        if self.target in champions:
-            self.counts["division"] += 1
-        elif self.target in wildcards:
-            self.counts["wild_card"] += 1
-        else:
-            self.counts["miss"] += 1
-        self.fallback_samples += standings.random_tie
+        return champions, wildcards, standings.random_tie
 
     def report(self, simulations):
         if self.reason:

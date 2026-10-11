@@ -1,0 +1,142 @@
+{
+  "version": "chronological-v1",
+  "history_start": 2016,
+  "evaluation_seasons": [
+    2021,
+    2022,
+    2023,
+    2024,
+    2025
+  ],
+  "cutoff_policy": "kickoff_previous_day",
+  "inner_seasons": 2,
+  "min_training_seasons": 3,
+  "max_training_seasons": 6,
+  "minimum_games": 200,
+  "minimum_coverage": 0.95,
+  "bootstrap_samples": 2000,
+  "seed": 42,
+  "gate": "both_probability_scores",
+  "candidates": [
+    {
+      "id": "elo",
+      "family": "elo"
+    },
+    {
+      "id": "weekly_qb_no_extra_rest_l2_0.1",
+      "family": "matchup",
+      "penalty": 0.1,
+      "indices": [
+        0,
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "id": "weekly_qb_no_extra_rest_l2_0.3",
+      "family": "matchup",
+      "penalty": 0.3,
+      "indices": [
+        0,
+        1,
+        2,
+        3,
+        5
+      ]
+    },
+    {
+      "id": "passing_qb_l2_0.1",
+      "family": "matchup",
+      "penalty": 0.1,
+      "indices": [
+        0,
+        1,
+        5
+      ]
+    },
+    {
+      "id": "passing_qb_l2_0.3",
+      "family": "matchup",
+      "penalty": 0.3,
+      "indices": [
+        0,
+        1,
+        5
+      ]
+    },
+    {
+      "id": "weekly_qb_travel_l2_0.1",
+      "family": "advanced",
+      "penalty": 0.1,
+      "indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        22,
+        23,
+        24,
+        25,
+        26
+      ]
+    },
+    {
+      "id": "weekly_qb_travel_l2_0.3",
+      "family": "advanced",
+      "penalty": 0.3,
+      "indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        22,
+        23,
+        24,
+        25,
+        26
+      ]
+    },
+    {
+      "id": "matchup_full",
+      "family": "matchup",
+      "penalty": 0.03
+    },
+    {
+      "id": "advanced_full",
+      "family": "advanced",
+      "penalty": 0.1
+    }
+  ],
+  "comparisons": [
+    [
+      "advanced_full",
+      "weekly_qb_travel_l2_0.1"
+    ],
+    [
+      "advanced_full",
+      "weekly_qb_travel_l2_0.3"
+    ],
+    [
+      "matchup_full",
+      "weekly_qb_no_extra_rest_l2_0.1"
+    ],
+    [
+      "matchup_full",
+      "weekly_qb_no_extra_rest_l2_0.3"
+    ],
+    [
+      "matchup_full",
+      "passing_qb_l2_0.1"
+    ],
+    [
+      "matchup_full",
+      "passing_qb_l2_0.3"
+    ]
+  ]
+}

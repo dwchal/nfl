@@ -85,6 +85,17 @@ approximate model probabilities, not official clinching or elimination claims.
 The [2020 format announcement](https://www.nfl.com/news/owners-approve-expanding-postseason-to-14-teams-0ap3000001107961)
 documents the additional wild-card places.
 
+## Latest modeling research
+
+The [four-part follow-up](docs/model-research-round-2.md) fixes contradictory
+starter evidence, tests QB rushing value, validates historical season/playoff
+projections, and compares smaller feature models. QB rushing gains five correct
+picks on 1,359 games, but its probability-score uncertainty includes no gain.
+Reduced models do not beat the full advanced reference. Across 1,024 historical
+team/checkpoint forecasts, the displayed 80% win range covers 81.5% of final
+records. The default remains Elo; the reports and reproduction commands are
+linked in the follow-up. Advanced starter-evidence handling is now version v6.
+
 ## Advanced matchup model
 
 Current models distinguish missing statistics from measured zero, normalize

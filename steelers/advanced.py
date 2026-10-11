@@ -17,7 +17,7 @@ from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
 from .model import historical_offsets, metrics, select_model, team_key
 from .pbp import PBPStore
 
-VERSION = "advanced-v5"
+VERSION = "advanced-v6"
 LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offense", "defense") for label in pbp.LABELS) + travel.LABELS + (
     "Wind × passing reliance", "Rain × passing reliance", "Cold × passing reliance",
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")

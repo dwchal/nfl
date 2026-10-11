@@ -71,6 +71,7 @@ def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIO
     playoff_rng = random.Random(43)
     if simulations < 1:
         raise ValueError("At least one season simulation is required.")
+    remaining = sorted(remaining, key=lambda g: (g.day, g.kickoff, g.id))
     race = PlayoffRace(season_games, season, team, postseason) if season_games is not None else None
     counts = Counter()
     odds_multipliers = {identifier: math.exp(shift) for identifier, shift in (corrections or {}).items()}

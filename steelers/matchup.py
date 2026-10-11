@@ -157,6 +157,10 @@ def replay(games, season, config, bundle, state=None, *, as_of_utc=None):
                      "result": result, "covered": all(feature_key(game.season, game.week, game.kind, t) in bundle[kind]
                                                          for t in (game.home, game.away) for kind in ("team", "player")),
                      "pbp_covered": all(team_key(t) in getattr(state, "plays", {}).get(game.id, {}) for t in (game.home, game.away))})
+        if hasattr(state, "rushing"):
+            rows[-1]["qb_rushing_covered"] = all(
+                (entry := state.rushing.get(game.id, {}).get(team_key(t))) is not None and entry["unknown_runs"] == 0
+                for t in (game.home, game.away))
         update_ratings(ratings, home, away, result, game.neutral, config, game.home_score - game.away_score)
         pending.append(game)
     # The final flush obeys the same publication cutoff as the main loop.
