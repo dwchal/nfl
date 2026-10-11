@@ -46,6 +46,8 @@ def artifact(family, config, model=None, selection=None, revision=None, season=N
                "feature_names": list(labels), "weights": list(model.weights) if model else [0.] * len(labels),
                "elo_config": asdict(config), "training_seasons": report.get("tuning_seasons", []),
                "fitting_options": {"penalty": .1 if family == "advanced" else .03 if family == "matchup" else None,
+                                   "starters": "deterministic" if family == "advanced" else None,
+                                   "feature_group": "full_passing" if family == "advanced" else None,
                                    "protocol": "annual-six-season" if family == "advanced" else "fixed-three-season" if family == "matchup" else "prior-six-season-selection",
                                    "comparison_seasons": report.get("test_seasons", []), "optimizer": report.get("optimizer"),
                                    "support": report.get("support"), "automatic_promotion": report.get("promoted", False)},
@@ -61,7 +63,7 @@ def encode_inputs(games, bundle=None, data=None, metadata=None):
             "bundle": {**{k: v for k, v in bundle.items() if k not in {"team", "player"}},
                        "team": [[list(key), asdict(value)] for key, value in sorted(bundle.get("team", {}).items())],
                        "player": [[list(key), [asdict(q) for q in values]] for key, values in sorted(bundle.get("player", {}).items())]},
-            "advanced": {"plays": data.get("plays", {}), "sources": data.get("sources", []),
+            "advanced": {"plays": data.get("plays", {}), "qb_rushing": data.get("qb_rushing", {}), "sources": data.get("sources", []),
                          "evidence": [[list(key), rows] for key, rows in sorted(data.get("evidence", Evidence()).indexed.items())]},
             "metadata": metadata or {}}
 
@@ -92,7 +94,8 @@ class PredictionInputs:
             games = self.games_at(cutoff)
             payload = model_artifact["payload"]
             config = ModelConfig(**payload["elo_config"])
-            state = (AdvancedState(self.advanced.get("plays"), self.advanced.get("evidence"), now=cutoff)
+            state = (AdvancedState(self.advanced.get("plays"), self.advanced.get("evidence"), now=cutoff,
+                                   qb_rushing=self.advanced.get("qb_rushing"))
                      if payload["family"] == "advanced" else None)
             _, state, _ = replay(games, season, config, self.bundle, state, as_of_utc=cutoff)
             ratings = replay_season(games, season, config)[0]
@@ -144,20 +147,26 @@ def predict_game(game, model_artifact, inputs, as_of_utc):
     state, ratings = inputs.runtime(model_artifact, cutoff, game.season)
     config = ModelConfig(**payload["elo_config"])
     probability = game_probability(ratings.get(team_key(game.home), BASE_RATING), ratings.get(team_key(game.away), BASE_RATING), game, config)
-    base, features, coverage, evidence, reasons = probability, [], {}, {}, []
+    base, features, scenarios, coverage, evidence, reasons = probability, [], [], {}, {}, []
     if payload["family"] != "elo":
         features = state.features(game)
         coverage = state.coverage(game)
         if payload["family"] == "advanced":
             evidence = state.contexts[game.id]
+            scenarios = state.scenarios(game)
         if not payload["available"]:
             reasons.append(payload["fallback_reason"])
         else:
+            # Deterministic starters; scenario forecasts are reported as context.
             probability = corrected(base, features, payload["weights"])
-    feature_digest = identity({"features": features, "coverage": coverage, "evidence": evidence, "elo_probability": base})
+    feature_digest = identity({"features": features, "scenarios": scenarios, "coverage": coverage, "evidence": evidence, "elo_probability": base})
+    conditional = [{"home_qb": s["home_qb"], "away_qb": s["away_qb"], "weight": s["weight"],
+                    "home_probability": corrected(base, s["features"], payload["weights"]) if payload["available"] else base}
+                   for s in scenarios]
     return {"home_probability": probability, "elo_home_probability": base, "artifact_id": model_artifact["id"],
             "input_manifest_hash": inputs.manifest_hash, "feature_digest": feature_digest,
             "as_of_utc": cutoff.isoformat(), "evidence": evidence, "input_coverage": coverage,
+            "starter_scenarios": conditional,
             "fallback_reasons": reasons, "input_type": inputs.manifest["input_type"]}
 
 
@@ -173,7 +182,7 @@ def local_sources(schedule_store, feature_store, advanced_store, bundle, season,
                        "expected_sha256": source.get("sha256")}) for source in bundle.get("sources", []) if source.get("sha256"))
     directory = getattr(advanced_store, "directory", None)
     if directory:
-        paths.extend((f"advanced/pbp_{year}.json", directory / f"pbp_{year}.json", {"schema": "situations-v1"}) for year in range(season - 8, season + 1))
+        paths.extend((f"advanced/pbp_{year}.json", directory / f"pbp_{year}.json", {"schema": "situations"}) for year in range(season - 8, season + 1))
     sources = []
     for name, path, metadata in paths:
         if path.exists():
@@ -192,7 +201,7 @@ def local_sources(schedule_store, feature_store, advanced_store, bundle, season,
                     continue
                 if data is not None and payload["games"] != {key: value for key, value in data.get("plays", {}).items() if key.startswith(f"{year}_")}:
                     raise ValueError("PBP source changed during capture; retry collection")
-                metadata = {**metadata, "source_url": payload.get("source_url"), "provider_timestamp": None,
+                metadata = {**metadata, "schema": payload["version"], "source_url": payload.get("source_url"), "provider_timestamp": None,
                             "retrieved_at_during_preparation": payload.get("retrieved_at"), "provider_file_sha256": payload.get("source_sha256")}
             sources.append((name, raw, metadata))
     return sources

@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
+from steelers.advanced import FEATURE_GROUPS, LABELS as ADVANCED_LABELS, group_indices
 from steelers.evidence import Evidence, EvidenceStore
 from steelers.experiments import ReplayRows, encode_report, load_inputs, run, validate_config
 from steelers.features import QBWeek, TeamWeek
@@ -157,6 +158,101 @@ class ChronologicalTests(unittest.TestCase):
         self.assertEqual(json.dumps(first, sort_keys=True, allow_nan=False), json.dumps(second, sort_keys=True, allow_nan=False))
         self.assertIsNone(first["selected_policy"]["winner_changes"])
         self.assertIn("Insufficient", first["folds"][0]["selection_reason"])
+
+
+class ReducedModelTests(unittest.TestCase):
+    """chronological-v2: declared feature groups and an inner-fold Elo blend."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.games = ChronologicalTests.games if hasattr(ChronologicalTests, "games") else history()
+        cls.bundle = bundle_for(cls.games)
+        cls.data = {"plays": {g.id: {team: [[2., 35.] for _ in range(8)] for team in (g.home, g.away)} for g in cls.games}}
+        cls.config = {**PROTOCOL, "version": "chronological-v2", "bootstrap_samples": 5,
+                      "blend": {"alphas": [0, 0.5, 1]},
+                      "candidates": [{"id": "elo", "family": "elo"},
+                                     {"id": "travel", "family": "advanced", "features": "travel", "penalty": 0.1},
+                                     {"id": "full", "family": "advanced", "features": "full", "penalty": 0.1}]}
+        cls.report = run(cls.games, cls.bundle, cls.data, 2023, 2024, cls.config)
+
+    def test_registry_groups_resolve_to_unique_labels_within_width(self):
+        for name in FEATURE_GROUPS:
+            indices = group_indices(name)
+            self.assertEqual(len(set(indices)), len(indices))
+            self.assertTrue(all(0 <= i < len(ADVANCED_LABELS) for i in indices))
+        self.assertEqual(group_indices("full"), tuple(range(len(ADVANCED_LABELS))))
+        self.assertNotIn(ADVANCED_LABELS.index("Rest advantage"), group_indices("qb_weekly_travel"))
+        with self.assertRaises(ValueError):
+            group_indices("unknown")
+        with patch.dict(FEATURE_GROUPS, {"broken": ("Travel distance", "Not a feature")}):
+            with self.assertRaises(ValueError):
+                group_indices("broken")
+
+    def test_full_group_reproduces_the_v1_advanced_candidate(self):
+        v1 = {**PROTOCOL, "bootstrap_samples": 5, "candidates": [{"id": "elo", "family": "elo"},
+                                                                 {"id": "advanced", "family": "advanced", "penalty": 0.1}]}
+        legacy = run(self.games, self.bundle, self.data, 2023, 2024, v1)
+        self.assertEqual([r["candidate_probabilities"]["advanced"] for r in legacy["games"]],
+                         [r["candidate_probabilities"]["full"] for r in self.report["games"]])
+        self.assertEqual(legacy["version"], "chronological-v1")
+        self.assertNotIn("blended_policy", legacy)
+        self.assertTrue(all("blend" not in fold and "blended_probability" not in game
+                            for fold in legacy["folds"] for game in legacy["games"]))
+
+    def test_declared_group_only_removes_coefficients(self):
+        travel = {i for i, label in enumerate(ADVANCED_LABELS) if label in FEATURE_GROUPS["travel"]}
+        for fit in self.report["fits"].values():
+            if fit["candidate"]["id"] == "travel":
+                self.assertTrue(all(w == 0 for i, w in enumerate(fit["weights"]) if i not in travel))
+                self.assertEqual(set(fit["features"]), set(FEATURE_GROUPS["travel"]))
+                self.assertEqual(set(fit["clipping"]), set(FEATURE_GROUPS["travel"]))
+                self.assertEqual(fit["training_rows"], 200 * len(fit["training_seasons"]))
+                self.assertLessEqual(fit["active_coefficients"], len(travel))
+
+    def test_blend_endpoints_are_exact_and_chosen_on_inner_folds_only(self):
+        for fold in self.report["folds"]:
+            blend = fold["blend"]
+            self.assertIn(blend["alpha"], self.config["blend"]["alphas"])
+            if fold["selected_config"]["id"] == "elo":
+                self.assertEqual(blend["alpha"], 0)
+                self.assertIsNone(blend["inner"])
+            else:
+                self.assertEqual([b["alpha"] for b in blend["inner"]], self.config["blend"]["alphas"])
+                elo, chosen = fold["inner"]["elo"]["metrics"], fold["inner"][fold["selected_config"]["id"]]["metrics"]
+                self.assertEqual(blend["inner"][0]["metrics"], elo)
+                self.assertEqual(blend["inner"][-1]["metrics"], chosen)
+                if blend["alpha"]:
+                    scores = {b["alpha"]: b["metrics"] for b in blend["inner"]}
+                    self.assertLess(scores[blend["alpha"]]["brier"], scores[0]["brier"])
+                    self.assertLess(scores[blend["alpha"]]["log_loss"], scores[0]["log_loss"])
+        for game in self.report["games"]:
+            alpha, chosen = game["blend_alpha"], game["candidate_probabilities"][game["selected_config"]["id"]]
+            expected = {0: game["incumbent_probability"], 1: chosen}.get(alpha, (1 - alpha) * game["incumbent_probability"] + alpha * chosen)
+            self.assertEqual(game["blended_probability"], expected)
+        self.assertEqual(self.report["blended_policy"]["metrics"]["games"], len(self.report["games"]))
+        self.assertEqual(set(self.report["games"][0]["coverage"]), {"elo", "advanced"})
+        # Outer outcomes cannot move the blend or the selection.
+        flipped = [replace(g, home_score=g.away_score, away_score=g.home_score) if g.season == 2024 else g for g in self.games]
+        altered = run(flipped, self.bundle, self.data, 2024, 2024, self.config)
+        self.assertEqual(altered["folds"][0]["blend"]["alpha"], self.report["folds"][-1]["blend"]["alpha"])
+        self.assertEqual(altered["folds"][0]["blend"]["inner"], self.report["folds"][-1]["blend"]["inner"])
+        self.assertEqual(altered["folds"][0]["selected_config"], self.report["folds"][-1]["selected_config"])
+
+    def test_v2_protocol_validation(self):
+        validate_config(self.config)
+        rejected = [{"version": "chronological-v3"},
+                    {"blend": {"alphas": [0.5, 1]}}, {"blend": {"alphas": [0, 1, 0.5]}}, {"blend": {"alphas": [0, 2]}},
+                    {"blend": {"alphas": [0]}}, {"blend": {"alphas": [0, 1], "extra": 1}},
+                    {"candidates": self.config["candidates"] + [{"id": "x", "family": "advanced", "features": "unknown", "penalty": 0.1}]},
+                    {"candidates": self.config["candidates"] + [{"id": "y", "family": "matchup", "features": "travel", "penalty": 0.1}]}]
+        for override in rejected:
+            with self.assertRaises(ValueError, msg=override):
+                validate_config({**self.config, **override})
+        with self.assertRaises(ValueError):
+            validate_config({**PROTOCOL, "blend": {"alphas": [0, 1]}})
+        with self.assertRaises(ValueError):
+            validate_config({**PROTOCOL, "candidates": PROTOCOL["candidates"] + [
+                {"id": "grouped", "family": "advanced", "features": "travel", "penalty": 0.1}]})
 
 
 class LocalInputsTests(unittest.TestCase):

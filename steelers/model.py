@@ -181,6 +181,30 @@ def backtest(games, seasons, config=BASELINE):
     return forecasts
 
 
+def roc_auc(forecasts):
+    """Home-win ROC AUC, excluding tied games and half-crediting tied scores.
+
+    A single outcome class has no defined AUC. Each game appears once, even
+    for a team subset; probabilities always retain their home-win orientation.
+    """
+    rows = sorted((r["probability"], r["result"]) for r in forecasts if r["result"] != .5)
+    positives = sum(y == 1 for _, y in rows)
+    negatives = len(rows) - positives
+    if not positives or not negatives:
+        return None
+    below, concordant, i = 0, 0.0, 0
+    while i < len(rows):
+        j = i + 1
+        while j < len(rows) and rows[j][0] == rows[i][0]:
+            j += 1
+        wins = sum(y == 1 for _, y in rows[i:j])
+        losses = j - i - wins
+        concordant += wins * (below + .5 * losses)
+        below += losses
+        i = j
+    return concordant / (positives * negatives)
+
+
 def metrics(forecasts, team=None):
     rows = [p for p in forecasts if team is None or team in {p["home"], p["away"]}]
     if not rows:
@@ -194,6 +218,7 @@ def metrics(forecasts, team=None):
     correct = sum((p["probability"] >= .5) == (p["result"] == 1) for p in decisive)
     return {"games": len(rows), "brier": brier, "log_loss": log_loss / len(rows),
             "accuracy": correct / len(decisive) if decisive else None,
+            "roc_auc": roc_auc(decisive),
             "ties": len(rows) - len(decisive)}
 
 

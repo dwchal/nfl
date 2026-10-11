@@ -33,6 +33,13 @@ The default season follows the NFL calendar (January–February belong to the pr
 
 ## Data and model
 
+Model comparisons now report **ROC AUC** alongside winner-pick accuracy,
+Brier error and log loss. The [AUC investigation](docs/auc-research.md) audits
+2021–2025 predictions and tests an opponent-adjusted scoring-margin model.
+The requested 0.80 target was not reached: selected Elo scores 0.685 and the
+best existing feature candidate scores 0.691. The new experiment is not
+promoted; the default remains unchanged.
+
 Schedules and scores come directly from [nflverse’s games.csv](https://github.com/nflverse/nfldata/blob/master/data/games.csv), the schedule feed used by the original R project. Downloads are validated and cached in `.cache/games.csv`. Data is refreshed when requested after an hour, or immediately using **Refresh data**. An unsuccessful download preserves the last valid snapshot and shows a warning. Provider update delays can affect scores and kickoff times; this is not a live play-by-play feed. Data remains subject to the provider’s terms.
 
 The **backtested default** adds scoring-margin weighting to Elo, followed by a gated confidence and rest calibration. Large wins have more influence, with logarithmic scaling and a correction for strong favorites beating weaker teams. The weighting is inspired by [FiveThirtyEight’s published NFL Elo approach](https://github.com/fivethirtyeight/nfl-elo-game/blob/master/forecast.py); this is our own implementation and evaluation, not FiveThirtyEight’s complete model.
@@ -94,7 +101,9 @@ picks on 1,359 games, but its probability-score uncertainty includes no gain.
 Reduced models do not beat the full advanced reference. Across 1,024 historical
 team/checkpoint forecasts, the displayed 80% win range covers 81.5% of final
 records. The default remains Elo; the reports and reproduction commands are
-linked in the follow-up. Advanced starter-evidence handling is now version v6.
+linked in the follow-up. Integrated advanced starter-evidence handling is now
+version v7; the concurrent starter-mixture and advanced rushing research below
+is preserved.
 
 ## Advanced matchup model
 
@@ -178,7 +187,14 @@ compare Elo, QB matchup, and advanced on the same 1,359 games from 2021–2025.
 For each outer season, candidates fit only earlier seasons and selection uses
 the last two earlier complete seasons. The runner records per-game forecasts,
 exact settings, coverage fallbacks, and source hashes in the
-[full report](docs/chronological-evaluation.json).
+[full report](docs/chronological-evaluation.json). A second experiment,
+[reduced correction models and an Elo blend](docs/reduced-model.md), compares
+four feature groups at three penalties under the same protocol; none is
+promoted, and the application default stays Elo. A third,
+[starter uncertainty and QB rushing](docs/quarterback-model.md), adds ordered
+starter evidence, candidate lists and conditional forecasts to the advanced
+model; the probability mixture and rushing feature did not change accuracy and
+are not deployed.
 
 ```sh
 python3 -m steelers.experiments --data .cache/games.csv \

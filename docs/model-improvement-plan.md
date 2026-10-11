@@ -3,11 +3,17 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Items 1–4 have been implemented as recorded below in the
+documentation only. Items 1–6 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
 [input-quality record](#item-2-implementation-record) and
 [chronological evaluation record](#item-3-implementation-record) and
-[prospective collection record](#item-4-implementation-record); items 5, 6 and 9 now have partial implementations recorded in the [four-part follow-up](model-research-round-2.md); items 7 and 8 remain proposed.
+[prospective collection record](#item-4-implementation-record) and
+[starter-uncertainty record](#item-5-implementation-record) and
+[reduced-model record](#item-6-implementation-record). The additional
+[four-part follow-up](model-research-round-2.md) strengthens starter evidence,
+adds a separate QB rushing experiment, validates season/playoff projections,
+and compares more feature masks. Items 7 and 8, item 6's recency/prior searches,
+and item 9's margin/latent-strength simulation variants remain proposed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -1001,13 +1007,111 @@ digests reproduce exactly from the saved immutable inputs and artifacts.
 The next planned priority is item 5: model quarterback uncertainty and rushing
 contribution.
 
+## Item 6 implementation record
+
+`steelers/advanced.py` now carries a label-based feature registry and four
+declared groups (`full`, `qb_weekly_travel`, `qb_situational_travel`,
+`travel`); the reduced groups omit the rest coefficient that calibrated Elo
+already supplies. `steelers/experiments.py` accepts protocol
+`chronological-v2`: advanced candidates may name a group, support gates still
+apply, and an optional blend `p = (1 − α)·p_elo + α·p_selected` is chosen on the
+inner-fold predictions only, preferring smaller α and requiring both scores to
+beat α = 0. α = 0 is exactly Elo and α = 1 exactly the correction. Fits report
+active labels, training rows, clipping rates at the ±4 bound, active
+coefficient counts and optimizer status. v1 configurations still validate and
+reproduce the [v1 report](chronological-evaluation.json) game for game.
+
+The [experiment](experiments/reduced.json) compares the four groups at L2
+penalties 0.03, 0.1 and 0.3 with Elo on the same 1,359 games from 2021–2025;
+[results](reduced-model.md) and the [full report](reduced-evaluation.json)
+are checked in. No reduced model beats the full model at the same penalty; the
+best pooled candidate is full at 0.03 (Brier 0.221880 versus 0.224121), the
+22-feature situational group is within 0.00002 of it, and the penalty matters
+more than the group. Heavier shrinkage (0.3) gives smaller gains whose
+intervals exclude zero; lighter shrinkage gives larger but less stable gains.
+The inner-selected policy scores 0.223320 and the blended policy 0.223603,
+because every correction model worsens 2025 and the blend chooses α = 1 in all
+selected years but 2024. The 2025 snapshots have full coverage; corrections
+are simply more confident in a season that punished confidence. Nothing is
+promoted; the application default and the experimental selector are unchanged.
+Step 5 (recency and count-prior grids) is deferred to its own change.
+
+New tests check registry resolution and width, that an unknown or mismatched
+group fails, that the `full` group reproduces the v1 advanced candidate exactly,
+that a declared group only removes coefficients, that blend endpoints are exact
+and chosen on inner predictions alone, that outer outcomes cannot move the
+blend or the selection, and the v2 configuration validation rules.
+
+**Validation.** All 151 tests pass on Python 3.14.2. Two independent local CLI
+runs produce byte-identical reports; the v1 configuration under the v2 runner
+reproduces every checked-in 2021–2025 forecast. No downloads or forecast
+captures are needed.
+
+## Item 5 implementation record
+
+`Evidence.quarterback_candidates` now orders starter evidence in time: an
+Out/Inactive report issued after a confirmation invalidates it and records the
+conflict; a previous passer absent from the current depth chart is rejected;
+with no depth evidence the fallback is labeled unverified; all candidates ruled
+out yields an explicit unknown. `quarterback()` is the compatibility view of
+the top candidate. `AdvancedState` accumulates labeled starter examples only
+from games with a timestamped candidate list, using the subsequently observed
+leading passer as a proxy outcome and never as an input. With 100 earlier
+examples per evidence class it applies `(top + 1) / (examples + 2)` smoothing
+with add-one rank categories; below that the forecast is exactly the
+deterministic assumption. `corrected_mixture` averages probabilities over
+home × away candidates (equal weights on 0.2 and 0.8 give 0.5); what-if
+selections collapse a side; the unknown candidate passes the empty identifier.
+
+`situations-v2` adds a separate `qb_rushing` aggregate (scrambles and designed
+runs by a player who passed in that game; kneels, spikes and no-plays
+excluded) without changing the team arrays; v1 files stay valid without
+rushing support. `advanced-v6` adds `Quarterback rushing change`: the assumed
+starter's decayed rushing EPA above the league QB mean (50-carry prior) minus
+the team's recent QB rushing contribution under the same decay, so an
+unchanged starter is exactly zero. It is gated on 100 covered training games
+and 20 nonzero observations; being continuous, it is exempt from the
+zero-observation rule. `next_context`, the capture service and the archive now
+carry `qb_candidates`, `starter_scenarios` and `assumption_source`.
+
+The [experiment](experiments/quarterbacks.json) scores passing-only versus
+passing-plus-rushing, each with deterministic and mixture starters, on the
+same 1,359 games; [results](quarterback-model.md) and the
+[full report](quarterback-evaluation.json) are checked in. Deterministic
+passing reproduces `advanced-v5` exactly (Brier 0.222061). The mixture
+activates in 2025 week 4, moves 210 forecasts by 0.001 and scores 0.222071;
+rushing is enabled in every fit with coefficients of −0.0025 to 0.0489 and
+scores 0.222079. Neither passes its separate gate, so the application keeps
+deterministic starters and the passing-only label set
+(`AdvancedModel.mixture = False`, `feature_group = full_passing` in artifacts).
+Nothing is promoted; the default remains Elo. v1 experiment configurations now
+mean the passing-only, deterministic model so earlier reports keep their
+meaning.
+
+New tests cover later-Out conflicts, departed previous passers, all candidates
+ruled out, unknown starters, deterministic exposure, learned probabilities
+summing to one with ruled-out mass sent to unknown, mixture arithmetic and
+exactness, examples drawn only from earlier games with candidate lists,
+what-if collapse and `next_context` output, aggregate exclusions and v1/v2
+validation, verified rushing changes, and the rushing support gate.
+
+**Validation.** All 160 tests pass on Python 3.14.2. Two independent local CLI
+runs produce byte-identical reports. Play-by-play for 2018–2026 was
+re-downloaded once to build `situations-v2`; no other network access was
+needed.
+
+The next planned priority is item 7: weight player absences by expected
+participation, once the availability feed can attest report completeness.
+
 ## 2026-10-11 follow-up: items 5, 6 and 9
 
 The [four-part implementation and results](model-research-round-2.md) records
-the production starter-evidence correction, a separate QB rushing experiment,
-the season/playoff projection audit, and reduced-feature/penalty comparisons.
-All requested experiments have run on the local historical inputs. The current
-default remains Elo. Item 5 starter mixtures, item 6 decay/prior searches, and
-item 9 margin/latent-strength variants remain proposed; the record does not
-claim those broader roadmap items are fully complete. Historical reports above
-remain preserved.
+the production starter-evidence correction, a separate position-classified QB
+rushing experiment, the season/playoff projection audit, and additional
+reduced-feature/penalty comparisons. All four requested evaluations have run on
+the local historical inputs. The default remains Elo. The earlier starter
+mixture and advanced rushing experiments above are preserved; neither is
+promoted. Item 6 decay/prior searches and item 9 margin/latent-strength variants
+remain proposed. The current advanced version is `advanced-v7`, incorporating
+the v6 candidate interface and the additional evidence reconciliation.
+Historical reports above retain their original results and source manifests.

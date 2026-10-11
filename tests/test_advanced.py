@@ -14,8 +14,8 @@ from urllib.request import Request, urlopen
 
 from app import make_handler
 from steelers.analysis import build_dashboard
-from steelers.advanced import (AdvancedModel, AdvancedState, AdvancedStore, LABELS,
-                              WEATHER_START, enabled_indices, evaluate_advanced)
+from steelers.advanced import (AVAILABILITY_START, AdvancedModel, AdvancedState, AdvancedStore, LABELS,
+                              RUSHING, WEATHER_START, enabled_indices, evaluate_advanced)
 from steelers.data import ScheduleStore
 from steelers.evidence import AVAILABILITY_VERSION, Evidence, EvidenceStore, availability_complete
 from steelers.features import QBWeek, feature_key
@@ -188,7 +188,7 @@ class AdvancedFeaturesTests(unittest.TestCase):
         legacy = {"available_at": (cutoff - timedelta(hours=1)).isoformat(),
                   "players": [{"team": "PIT", "id": "out", "position": "WR", "status": "Out"}]}
         state = AdvancedState(evidence=Evidence({("availability", game.id): [legacy]}), now=cutoff)
-        self.assertEqual(state.features(game)[-4:], [0.] * 4)
+        self.assertEqual(state.features(game)[AVAILABILITY_START:RUSHING], [0.] * 4)
         self.assertTrue(state.coverage(game)["missing"]["availability"])
         rows = [{"id": str(i), "features": [1.] * len(LABELS)} for i in range(100)]
         contexts = {r["id"]: {"weather": None, "availability": {"players": []},
@@ -196,12 +196,12 @@ class AdvancedFeaturesTests(unittest.TestCase):
         indices, support = enabled_indices(rows, contexts)
         self.assertEqual(support["availability_games"], 0)
         self.assertFalse(support["availability_enabled"])
-        self.assertTrue(all(i < len(LABELS) - 4 for i in indices))
+        self.assertTrue(all(i < AVAILABILITY_START for i in indices))
         complete = {**legacy, "version": AVAILABILITY_VERSION, "team_reports": {
             "PIT": {"status": "reported", "complete": True},
             "MIN": {"status": "explicitly_empty", "complete": True}}}
         state.evidence = Evidence({("availability", game.id): [complete]})
-        self.assertNotEqual(state.features(game)[-4:], [0.] * 4)
+        self.assertNotEqual(state.features(game)[AVAILABILITY_START:RUSHING], [0.] * 4)
         self.assertFalse(state.coverage(game)["missing"]["availability"])
 
     def test_availability_effect_requires_complete_varied_training_evidence(self):

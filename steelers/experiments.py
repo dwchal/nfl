@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
-from .advanced import AdvancedState, LABELS as ADVANCED_LABELS, enabled_indices
+from .advanced import AdvancedState, FEATURE_GROUPS, LABELS as ADVANCED_LABELS, enabled_indices, group_indices
 from .context_research import pick_comparison
 from .coverage import MIN_COVERAGE, MIN_GAMES, sufficient_history, training_coverage
 from .data import parse_games
@@ -22,12 +22,16 @@ from .evaluation import paired_uncertainty
 from .evidence import Evidence, timestamp
 from .features import VERSION as WEEKLY_VERSION, parse_feature_csv
 from .forecast import kickoff_utc
-from .matchup import LABELS as MATCHUP_LABELS, corrected, fit_correction, replay
+from .matchup import LABELS as MATCHUP_LABELS, corrected_mixture, fit_correction, replay
 from .model import ModelConfig, chronological_forecasts, metrics, reliability_bins
+from .optimization import CLIP_BOUND
 from .pbp import validate as validate_pbp
 from .qb_rushing import RushingState, LABELS as RUSHING_LABELS, validate as validate_rushing
 
-VERSION = "chronological-v1"
+# v1: Elo, QB matchup and full advanced candidates. v2 adds declared advanced
+# feature groups and an optional Elo probability blend chosen on inner folds.
+VERSIONS = ("chronological-v1", "chronological-v2")
+VERSION = VERSIONS[-1]
 CUTOFF_POLICY = "Kickoff; weekly/PBP observations from earlier calendar days only."
 
 
@@ -40,13 +44,26 @@ def validate_config(config):
     required = {"version", "history_start", "evaluation_seasons", "cutoff_policy", "inner_seasons", "min_training_seasons",
                 "max_training_seasons", "minimum_games", "minimum_coverage",
                 "bootstrap_samples", "seed", "gate", "candidates"}
-    if set(config) not in (required, required | {"comparisons"}):
-        raise ValueError("Experiment config must contain exactly: " + ", ".join(sorted(required)))
-    fixed = {"version": VERSION, "cutoff_policy": "kickoff_previous_day", "inner_seasons": 2, "min_training_seasons": 3,
+    version = config.get("version")
+    if version not in VERSIONS:
+        raise ValueError("Unsupported chronological protocol version")
+    extended = version != VERSIONS[0]
+    optional = {"comparisons"} | ({"blend"} if extended else set())
+    if not required <= set(config) <= required | optional:
+        raise ValueError("Experiment config must contain exactly: " + ", ".join(sorted(required))
+                         + (" and optionally: " + ", ".join(sorted(optional)) if optional else ""))
+    fixed = {"cutoff_policy": "kickoff_previous_day", "inner_seasons": 2, "min_training_seasons": 3,
              "max_training_seasons": 6, "minimum_games": MIN_GAMES,
              "minimum_coverage": MIN_COVERAGE, "seed": 42, "gate": "both_probability_scores"}
     if any(config[key] != value for key, value in fixed.items()):
         raise ValueError("Unsupported chronological protocol settings")
+    if "blend" in config:
+        blend = config["blend"]
+        alphas = blend.get("alphas") if isinstance(blend, dict) else None
+        if (set(blend) != {"alphas"} or not isinstance(alphas, list) or len(alphas) < 2
+                or any(type(a) not in (int, float) or not 0 <= a <= 1 for a in alphas)
+                or alphas != sorted(set(alphas)) or alphas[0] != 0):
+            raise ValueError("blend.alphas must be distinct ascending values in [0, 1] starting at 0")
     if type(config["history_start"]) is not int or config["history_start"] < 1999:
         raise ValueError("history_start must be a season from 1999 onward")
     years = config["evaluation_seasons"]
@@ -65,14 +82,23 @@ def validate_config(config):
         if identifier in seen or (family == "elo" and identifier != "elo"):
             raise ValueError("Candidate identifiers must be unique; Elo is listed once")
         seen.add(identifier)
-        expected = {"id", "family"} if family == "elo" else {"id", "family", "penalty"}
-        if set(candidate) not in (expected, expected | {"indices"}) or family == "elo" and "indices" in candidate:
+        keys = {"id", "family"} if family == "elo" else {"id", "family", "penalty"}
+        required_keys = keys.copy()
+        if family != "elo":
+            keys.add("indices")
+        if family == "advanced" and extended:
+            keys |= {"features", "starters"}
+        if not required_keys <= set(candidate) <= keys:
             raise ValueError("Invalid candidate settings")
         if "indices" in candidate:
             indices = candidate["indices"]
             width = len(ADVANCED_LABELS) if family == "advanced" else 7 if family == "qb_rushing" else 6
             if not isinstance(indices, list) or not indices or any(type(i) is not int or not 0 <= i < width for i in indices) or indices != sorted(set(indices)):
                 raise ValueError("Feature indices must be sorted, unique, nonempty and within the candidate width")
+        if candidate.get("features", "full") not in FEATURE_GROUPS:
+            raise ValueError("Unknown advanced feature group: " + str(candidate.get("features")))
+        if candidate.get("starters", "deterministic") not in {"deterministic", "mixture"}:
+            raise ValueError("starters must be deterministic or mixture")
         if family != "elo" and (type(candidate["penalty"]) not in (int, float)
                                 or not math.isfinite(candidate["penalty"]) or candidate["penalty"] <= 0):
             raise ValueError("Correction penalties must be finite and positive")
@@ -84,7 +110,7 @@ def validate_config(config):
     return config
 
 
-def load_inputs(schedule, features, advanced, history_start, end, rushing=None):
+def load_inputs(schedule, features, advanced, history_start, end, rushing_directory=None):
     """Read immutable local snapshots, including SQLite through a read-only URI.
 
     Optional absent/invalid sources are recorded and left absent. The adapters
@@ -106,7 +132,8 @@ def load_inputs(schedule, features, advanced, history_start, end, rushing=None):
         raise ValueError("A local schedule is required")
     games = parse_games(raw.decode("utf-8-sig"))
     bundle = {"team": {}, "player": {}, "schema": WEEKLY_VERSION}
-    plays, rush, evidence = {}, {}, Evidence()
+    plays, rushing, evidence = {}, {}, Evidence()
+    classified_rushing = {}
     for year in range(max(1999, history_start - 8), end + 1):
         for kind, prefix in (("team", "stats_team"), ("player", "stats_player")):
             filename = f"{prefix}_week_{year}.csv"
@@ -121,15 +148,17 @@ def load_inputs(schedule, features, advanced, history_start, end, rushing=None):
             content = read(advanced / filename, "advanced/" + filename)
             if content is not None:
                 try:
-                    plays.update(validate_pbp(json.loads(content), year)["games"])
+                    payload = validate_pbp(json.loads(content), year)
+                    plays.update(payload["games"])
+                    rushing.update(payload.get("qb_rushing", {}))
                 except (ValueError, TypeError, KeyError) as error:
                     sources[-1].update(status="invalid", reason=str(error))
-        if rushing is not None:
+        if rushing_directory is not None:
             filename = f"qb_rushing_{year}.json"
-            content = read(rushing / filename, "qb-rushing/" + filename)
+            content = read(rushing_directory / filename, "qb-rushing/" + filename)
             if content is not None:
                 try:
-                    rush.update(validate_rushing(json.loads(content), year)["games"])
+                    classified_rushing.update(validate_rushing(json.loads(content), year)["games"])
                 except (ValueError, TypeError, KeyError) as error:
                     sources[-1].update(status="invalid", reason=str(error))
     if advanced is not None:
@@ -154,7 +183,7 @@ def load_inputs(schedule, features, advanced, history_start, end, rushing=None):
             sources.append({"file": "advanced/evidence.sqlite3", "sha256": None, "status": "missing"})
     code = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path(__file__).parent.glob("*.py"))}
     manifest = {"sources": sources, "code": code, "weekly_schema": WEEKLY_VERSION}
-    return games, bundle, {"plays": plays, "qb_rushing": rush, "evidence": evidence}, manifest
+    return games, bundle, {"plays": plays, "qb_rushing": rushing, "classified_qb_rushing": classified_rushing, "evidence": evidence}, manifest
 
 
 class ReplayRows:
@@ -180,8 +209,9 @@ class ReplayRows:
                 # Reconstruct at kickoff independently of the wall clock used
                 # by the live dashboard's min(kickoff, now) cutoff.
                 state = (AdvancedState(self.data.get("plays"), self.data.get("evidence"),
-                                       now=datetime.max.replace(tzinfo=timezone.utc)) if family == "advanced" else
-                         RushingState(self.data.get("qb_rushing")) if family == "qb_rushing" else None)
+                                       now=datetime.max.replace(tzinfo=timezone.utc),
+                                       qb_rushing=self.data.get("qb_rushing")) if family == "advanced" else
+                         RushingState(self.data.get("classified_qb_rushing")) if family == "qb_rushing" else None)
                 rows, state, _ = replay([g for g in self.games if g.season <= year], year,
                                         ModelConfig(**self.configs[str(year)]), self.bundle, state)
                 self.cache[key] = [{**r, "elo_config": self.configs[str(year)]} for r in rows
@@ -198,11 +228,18 @@ class Fitted:
 
 
 class Adapter:
-    """Fit specified previous seasons without running another evaluation."""
+    """Fit specified previous seasons without running another evaluation.
+
+    v1 advanced candidates mean the passing-only label set with deterministic
+    starters, so earlier reports keep their meaning; v2 declares both.
+    """
 
     def __init__(self, candidate, replay_rows, protocol):
         self.candidate, self.replay, self.protocol = candidate, replay_rows, protocol
         self.family = candidate["family"]
+        legacy = protocol["version"] == VERSIONS[0]
+        self.group = candidate.get("features", "full_passing" if legacy else "full")
+        self.mixture = candidate.get("starters", "deterministic") == "mixture"
         self.cache = {}
 
     def fit(self, previous_years):
@@ -218,10 +255,10 @@ class Adapter:
             weights = (0.,) * width
             eligible = []
             for year in previous_years:
-                year_rows = self.replay.rows(self.family, year)
-                coverage = training_coverage(year_rows, [year], self.family == "advanced")
+                coverage = training_coverage(self.replay.rows(self.family, year), [year], self.family == "advanced")
                 rushing_ok = True
                 if self.family == "qb_rushing":
+                    year_rows = self.replay.rows(self.family, year)
                     fraction = sum(r.get("qb_rushing_covered", False) for r in year_rows) / max(1, len(year_rows))
                     coverage[str(year)]["qb_rushing_fraction"] = fraction
                     rushing_ok = fraction >= self.protocol["minimum_coverage"]
@@ -237,13 +274,26 @@ class Adapter:
             else:
                 train = [r for year in years for r in self.replay.rows(self.family, year)]
                 indices = tuple(self.candidate.get("indices", range(width)))
+                labels = RUSHING_LABELS if self.family == "qb_rushing" else MATCHUP_LABELS
                 if self.family == "advanced":
-                    supported, report["support"] = enabled_indices(train, self.replay.contexts)
-                    indices = tuple(i for i in indices if i in supported)
+                    labels = ADVANCED_LABELS
+                    indices, report["support"] = enabled_indices(train, self.replay.contexts)
+                    # Support gates still apply; a declared group can only remove coefficients.
+                    declared = set(group_indices(self.group))
+                    indices = tuple(i for i in indices if i in declared)
+                    if "indices" in self.candidate:
+                        indices = tuple(i for i in indices if i in self.candidate["indices"])
                 report["enabled_indices"] = list(indices)
+                if any(len(r["features"]) != len(labels) for r in train):
+                    raise ValueError("Training rows do not match the feature registry width")
                 weights, report["optimizer"] = fit_correction(train, indices, self.candidate["penalty"])
                 if not report["optimizer"]["converged"]:
                     report["fallback_reason"] = "Correction optimizer did not converge."
+                report["features"] = [labels[i] for i in indices]
+                report["training_rows"] = len(train)
+                report["clipping"] = {labels[i]: sum(abs(r["features"][i]) > CLIP_BOUND for r in train) / len(train)
+                                      for i in indices} if train else {}
+        report["active_coefficients"] = sum(w != 0 for w in weights)
         report["weights"] = list(weights)
         report["fit_id"] = digest(report)
         fitted = Fitted(weights, report)
@@ -264,7 +314,7 @@ class Adapter:
                     reason = "No earlier classified QB-rushing observations for one or both teams."
             probability = row["probability"]
             if self.family != "elo" and reason is None:
-                probability = corrected(probability, row["features"], fitted.weights)
+                probability = corrected_mixture(probability, row["features"], row.get("scenarios") if self.mixture else None, fitted.weights)
             predictions.append({**row, "probability": probability, "fallback_reason": reason,
                                 "fit_id": fitted.report["fit_id"]})
         return predictions
@@ -275,11 +325,11 @@ def comparison(baseline, candidate, samples):
         return None
     availability = {}
     if any("input_coverage" in row for row in candidate):
-        for signal in ("weekly", "quarterback", "pbp", "qb_rushing", "weather", "availability"):
+        for signal in ("weekly", "quarterback", "pbp", "weather", "availability", "qb_rushing"):
             available, missing = [], []
             for row in candidate:
                 coverage = row.get("input_coverage", {})
-                if signal in {"weather", "availability"}:
+                if signal in {"weather", "availability"} or signal == "qb_rushing" and signal in coverage.get("missing", {}):
                     if signal not in coverage.get("missing", {}):
                         continue
                     present = not coverage["missing"][signal]
@@ -312,15 +362,36 @@ def run(games, bundle, data, start, end, config, manifest=None):
                 and all(g.completed for g in target)]
     manifest = manifest or {}
     input_hashes = {"manifest": digest(manifest), "experiment": digest(config)}
-    report = {"version": VERSION, "config": config, "evaluation_seasons": list(range(start, end + 1)),
+    alphas = config.get("blend", {}).get("alphas")
+    protocol_extension = ("" if alphas is None else
+                          " Advanced candidates may declare a feature group; support gates still apply. After selection, a blend"
+                          " p = (1 - alpha) * p_elo + alpha * p_selected is chosen on the same inner predictions, preferring smaller"
+                          " alpha and requiring both scores to beat alpha 0, then frozen for the outer season.")
+    report = {"version": config["version"], "runner": VERSION, "config": config, "evaluation_seasons": list(range(start, end + 1)),
               "input_hashes": input_hashes, "inputs": manifest,
               "input_type": "Retrospective reconstructed kickoff forecasts, not archived live forecasts.",
               "caveat": "Previously explored development years; not an untouched test. Provider revisions and model-development selection remain. Bootstrap intervals do not account for development selection.",
-              "protocol": "For each outer season, select on the last two earlier complete seasons. Each candidate fits up to six earlier complete seasons meeting its source coverage, minimum three. Rank pooled inner Brier, then log loss, then declared candidate order; require both scores to beat Elo. Refit before the outer season. All candidates score identical games, including fallbacks. No production promotion.",
+              "protocol": "For each outer season, select on the last two earlier complete seasons. Each candidate fits up to six earlier complete seasons meeting its source coverage, minimum three. Rank pooled inner Brier, then log loss, then declared candidate order; require both scores to beat Elo. Refit before the outer season. All candidates score identical games, including fallbacks. No production promotion." + protocol_extension,
               "cutoff_policy": CUTOFF_POLICY, "folds": [], "skipped": [], "fits": {}, "games": []}
     pooled = {a.candidate["id"]: [] for a in adapters}
-    selected_rows = []
+    selected_rows, blended_rows = [], []
     game_index = {g.id: g for g in games}
+    families = {}
+    for adapter in adapters:
+        families.setdefault(adapter.family, adapter.candidate["id"])
+
+    def blended(elo_rows, rows, alpha):
+        # alpha 0 reproduces Elo exactly and alpha 1 the correction exactly.
+        return [{**r, "probability": (1 - alpha) * e["probability"] + alpha * r["probability"]}
+                for e, r in zip(elo_rows, rows)]
+
+    def choose_alpha(elo_rows, rows):
+        """Pick the blend on earlier inner predictions only; smaller alpha wins ties."""
+        scores = {alpha: metrics(blended(elo_rows, rows, alpha)) for alpha in alphas}
+        best = min(alphas, key=lambda alpha: (scores[alpha]["brier"], scores[alpha]["log_loss"], alpha))
+        if best and not (scores[best]["brier"] < scores[0]["brier"] and scores[best]["log_loss"] < scores[0]["log_loss"]):
+            best = 0
+        return best, [{"alpha": alpha, "metrics": scores[alpha]} for alpha in alphas]
 
     def predict(adapter, year):
         previous = [y for y in complete if y < year]
@@ -336,7 +407,7 @@ def run(games, bundle, data, start, end, config, manifest=None):
             report["skipped"].append({"season": year, "reason": "Not a complete regular season with at least 200 listed games; excluded from headline metrics."})
             continue
         inner_years = [y for y in complete if y < year][-config["inner_seasons"]:]
-        inner, selection_scores = {}, {}
+        inner, selection_scores, inner_predictions = {}, {}, {}
         for adapter in adapters:
             identifier = adapter.candidate["id"]
             inner_rows, folds = [], []
@@ -348,6 +419,7 @@ def run(games, bundle, data, start, end, config, manifest=None):
                               "fallback_games": sum(r["fallback_reason"] is not None for r in predictions)})
             inner[identifier] = {"folds": folds, "metrics": metrics(inner_rows)}
             selection_scores[identifier] = metrics(inner_rows)
+            inner_predictions[identifier] = inner_rows
         selected = 0
         reason = "Insufficient earlier complete inner validation seasons; use Elo."
         ranked = "elo"
@@ -367,26 +439,45 @@ def run(games, bundle, data, start, end, config, manifest=None):
             pooled[identifier].extend(outer[identifier])
         chosen = adapters[selected].candidate
         selected_rows.extend(outer[chosen["id"]])
-        report["folds"].append({"season": year, "elo_config": replay_rows.configs[str(year)],
-                                "inner_seasons": inner_years, "inner": inner, "ranked_candidate": ranked,
-                                "selected_config": chosen, "selection_reason": reason,
-                                "fits": {key: fit["fit_id"] for key, fit in fits.items()},
-                                "metrics": {key: metrics(rows) for key, rows in outer.items()},
-                                "selected_metrics": metrics(outer[chosen["id"]])})
+        fold = {"season": year, "elo_config": replay_rows.configs[str(year)],
+                "inner_seasons": inner_years, "inner": inner, "ranked_candidate": ranked,
+                "selected_config": chosen, "selection_reason": reason,
+                "fits": {key: fit["fit_id"] for key, fit in fits.items()},
+                "metrics": {key: metrics(rows) for key, rows in outer.items()},
+                "selected_metrics": metrics(outer[chosen["id"]])}
+        blended_outer = None
+        if alphas is not None:
+            alpha, inner_blends = 0, None
+            if selected:
+                alpha, inner_blends = choose_alpha(inner_predictions["elo"], inner_predictions[chosen["id"]])
+                blend_reason = ("Blend chosen on the same inner seasons; alpha 0 retained unless a larger alpha improves both scores."
+                                if alpha else "No blend improves both inner probability scores over Elo; alpha 0.")
+            else:
+                blend_reason = "Elo selected; nothing to blend."
+            blended_outer = blended(outer["elo"], outer[chosen["id"]], alpha)
+            blended_rows.extend(blended_outer)
+            fold["blend"] = {"alpha": alpha, "reason": blend_reason, "inner": inner_blends, "metrics": metrics(blended_outer)}
+        report["folds"].append(fold)
         for index, incumbent in enumerate(outer["elo"]):
             identifier = incumbent["id"]
             cutoff = kickoff_utc(game_index[identifier])
             candidates = {key: rows[index] for key, rows in outer.items()}
-            report["games"].append({**{key: incumbent[key] for key in ("id", "season", "week", "home", "away", "result")},
-                                    "cutoff": cutoff.isoformat() if cutoff else None, "cutoff_policy": CUTOFF_POLICY,
-                                    "incumbent_probability": incumbent["probability"],
-                                    "candidate_probabilities": {key: row["probability"] for key, row in candidates.items()},
-                                    "selected_probability": candidates[chosen["id"]]["probability"], "selected_config": chosen,
-                                    "elo_config": replay_rows.configs[str(year)],
-                                    "fit_ids": {key: fit["fit_id"] for key, fit in fits.items()},
-                                    "fallback_reasons": {key: row["fallback_reason"] for key, row in candidates.items()},
-                                    "coverage": {key: row.get("input_coverage", {}) for key, row in candidates.items()},
-                                    "input_hashes": input_hashes})
+            row = {**{key: incumbent[key] for key in ("id", "season", "week", "home", "away", "result")},
+                   "cutoff": cutoff.isoformat() if cutoff else None, "cutoff_policy": CUTOFF_POLICY,
+                   "incumbent_probability": incumbent["probability"],
+                   "candidate_probabilities": {key: row["probability"] for key, row in candidates.items()},
+                   "selected_probability": candidates[chosen["id"]]["probability"], "selected_config": chosen,
+                   "elo_config": replay_rows.configs[str(year)],
+                   "fit_ids": {key: fit["fit_id"] for key, fit in fits.items()},
+                   "fallback_reasons": {key: row["fallback_reason"] for key, row in candidates.items()},
+                   # v2 keys coverage by family: candidates in a family share one replay row.
+                   "coverage": ({key: row.get("input_coverage", {}) for key, row in candidates.items()}
+                                if config["version"] == VERSIONS[0] else
+                                {family: candidates[key].get("input_coverage", {}) for family, key in families.items()}),
+                   "input_hashes": input_hashes}
+            if blended_outer is not None:
+                row.update(blend_alpha=fold["blend"]["alpha"], blended_probability=blended_outer[index]["probability"])
+            report["games"].append(row)
     baseline = pooled["elo"]
     report["elo_configs"] = replay_rows.configs
     report["baseline"] = metrics(baseline)
@@ -394,6 +485,8 @@ def run(games, bundle, data, start, end, config, manifest=None):
     report["selected_policy"] = comparison(baseline, selected_rows, config["bootstrap_samples"])
     report["comparisons"] = {f"{right}_vs_{left}": comparison(pooled[left], pooled[right], config["bootstrap_samples"])
                              for left, right in config.get("comparisons", [])}
+    if alphas is not None:
+        report["blended_policy"] = comparison(baseline, blended_rows, config["bootstrap_samples"])
     return report
 
 

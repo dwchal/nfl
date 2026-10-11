@@ -21,13 +21,23 @@ ruled out, the result is an explicitly unknown starter; it cannot restore an
 old passer who is absent from that chart. Without eligible membership evidence,
 the previous-passer fallback is marked unverified, including across offseasons.
 Today's roster is never used to assert historical membership. Evidence remains
-append-only. The advanced model version is `advanced-v6`.
+append-only. The integrated advanced model version is `advanced-v7`.
 
-This is the evidence-correctness portion of roadmap item 5. Learned starter
-probability mixtures still require enough earlier timestamped labels; no
-unsupported injury probabilities have been introduced.
+This integrates with the candidate lists, learned starter mixtures, conditional
+forecasts and advanced rushing feature from the concurrently published
+[starter-uncertainty work](quarterback-model.md). Those interfaces are preserved.
+Mixtures still require enough earlier timestamped labels and remain experimental;
+the application retains deterministic starters and passing-only advanced features.
+The evidence correction also handles partial-report omissions and sourced reversals.
 
 ## 2. QB rushing experiment
+
+This seven-feature weekly matchup experiment is separate from the preserved
+35-feature advanced experiment in [quarterback-model.md](quarterback-model.md).
+It classifies rushers using annual roster positions and uses its own cache and
+state; the advanced experiment uses `situations-v2` and verified weekly QB
+positions. Their feature definitions and baselines differ, so their scores
+are separate comparisons. Neither is promoted.
 
 `steelers/qb_rushing.py` prepares a separate `qb-rushing-v1` cache. It preserves
 the original downloaded PBP/annual-roster files locally and records their URLs
@@ -203,7 +213,7 @@ report omissions, unknown starters and membership; QB-rushing play filters,
 coverage fallback and own/future/same-day isolation; feature masks; checkpoint
 score masking, prior-only Elo selection, all-team shared paths, exact seeded
 win-distribution agreement, known ties, zero remaining games, score formulas,
-season-block resampling and incomplete-season exclusion. All **160 tests pass**;
+season-block resampling and incomplete-season exclusion. All **183 tests pass**;
 JavaScript syntax and Git whitespace checks pass. The three final reports have
 source hashes verified against the final Python files.
 
