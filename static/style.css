@@ -335,6 +335,17 @@ h2 {
   font-size:12px;
   margin:7px 0;
 }
+.playoff-paths {
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:16px;
+  margin:22px 0;
+}
+.playoff-paths strong {
+  display:block;
+  font-size:28px;
+  margin-top:6px;
+}
 .chart {
   width:100%;
   min-height:175px;

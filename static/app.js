@@ -101,6 +101,7 @@ function render() {
   renderNext();
   renderMatchup();
   renderProjection();
+  renderPlayoffs();
   renderModelReport();
   renderMatchupReport();
   renderTrend();
@@ -186,19 +187,36 @@ function svg(content, viewBox, label, aspect = "xMidYMid meet") {
 
 function renderProjection() {
   const p = dashboard.projection;
-  $("projection").innerHTML = `<div class="outlook-head"><strong>${p.expected_wins.toFixed(1)}</strong><span>projected final wins</span></div>
-    <p class="projection-sub">${p.remaining ? `${p.remaining} games left · Middle 80% of simulations: ${p.low}–${p.high} wins` : "Regular season complete · final record shown below"}</p><div class="chart" id="distribution"></div><p class="caption">${p.remaining ? "Regular season only. Future ties are not simulated." : "No remaining regular-season games to simulate."}</p>`;
+  $("projection-samples").textContent = p.remaining ? `${p.simulations.toLocaleString()} simulations` : "Final record";
+  $("projection").innerHTML = `<div class="outlook-head"><strong>${record(p.predicted_record)}</strong><span>${p.remaining ? "most likely final record" : "final regular-season record"}</span></div>
+    <p class="projection-sub">${p.remaining ? `${pct(p.predicted_record.probability)} of simulations finish with this record. Average: ${p.expected_wins.toFixed(1)} wins · ${p.expected_losses.toFixed(1)} losses${p.ties ? ` · ${p.ties} ties` : ""}.` : "Regular season complete."}</p>
+    <p class="projection-sub">${p.remaining ? `${p.remaining} games left · Middle 80% of simulations: ${p.low}–${p.high} wins` : ""}</p><div class="chart" id="distribution"></div><p class="caption">${p.remaining ? "Regular season only. Future ties are not simulated." : "No remaining regular-season games to simulate."}</p>`;
   const dist = p.distribution;
   const max = Math.max(...dist.map(r => r.probability));
   const width = 460, height = 170, left = 35, usable = 410, baseline = 136;
   const spacing = usable / dist.length;
-  const peak = dist.reduce((a, b) => a.probability > b.probability ? a : b).wins;
+  const peak = p.predicted_record.wins;
   const bars = dist.map((row, i) => {
     const x = left + i * spacing + spacing * .14;
     const h = Math.max(1, row.probability / max * 94);
     return `<rect class="bar ${row.wins === peak ? "peak" : ""}" x="${x}" y="${baseline - h}" width="${spacing * .72}" height="${h}" rx="2"><title>${record(row)}: ${pct(row.probability)}</title></rect><text x="${x + spacing * .36}" y="${baseline + 18}" text-anchor="middle">${row.wins}</text>${row.wins === peak ? `<text x="${x + spacing * .36}" y="${baseline - h - 9}" text-anchor="middle">${pct(row.probability)}</text>` : ""}`;
   }).join("");
   $("distribution").append(svg(`${bars}<text x="14" y="${baseline + 18}">W</text>`, `0 0 ${width} ${height}`, `Projected final wins distribution. Expected wins ${p.expected_wins}; middle 80 percent range ${p.low} to ${p.high}.`));
+}
+
+function renderPlayoffs() {
+  const p = dashboard.projection.playoffs;
+  $("playoff-status").textContent = p.status === "observed" ? "Final outcome" : p.status === "estimated" ? "Model estimate" : "Unavailable";
+  if (p.status === "unavailable") {
+    $("playoffs").innerHTML = `<p class="caption">${esc(p.reason)}</p>`;
+    return;
+  }
+  $("playoffs").innerHTML = `<div class="probability"><strong>${pct(p.probability)}</strong><span>${p.status === "observed" ? (p.probability ? "qualified for the playoffs" : "did not qualify for the playoffs") : `${esc(dashboard.team.short_name)} chance of making the playoffs`}</span></div>
+    <div class="prob-track" id="playoff-track"></div>
+    ${p.status === "estimated" ? `<div class="playoff-paths">${[["Win the division", p.division_probability], ["Earn a wild card", p.wild_card_probability], ["Miss the playoffs", p.miss_probability]].map(([label, value]) => `<div><span class="muted">${label}</span><strong>${pct(value)}</strong></div>`).join("")}</div>
+    <p class="caption">${p.simulations.toLocaleString()} simulations · ${esc(dashboard.model.name)} · ${p.wild_card_slots} wild-card spots per conference. Division and wild-card paths add to the playoff chance.</p>` : ""}
+    <p class="caption">${esc(p.note)}</p>`;
+  $("playoff-track").append(svg(`<rect width="${(p.probability * 100).toFixed(2)}" height="7" fill="var(--accent)"/>`, "0 0 100 7", `Playoff qualification: ${pct(p.probability)}`, "none"));
 }
 
 function renderModelReport() {

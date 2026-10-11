@@ -202,6 +202,11 @@ class ServerTests(unittest.TestCase):
             body = json.load(response)
             self.assertEqual(body["team_stats"]["ties"], 1)
             self.assertIn("downloaded_at", body["data"])
+            projection = body["projection"]
+            self.assertEqual(sum(projection["predicted_record"][k] for k in ("wins", "losses", "ties")), 3)
+            self.assertEqual(projection["predicted_record"]["ties"], 1)
+            self.assertEqual(projection["playoffs"]["status"], "unavailable")
+            self.assertIsNone(projection["playoffs"]["probability"])
         for query in ("season=banana", "season=1900", "phase=unknown", "team=DAL", "model=unknown"):
             with self.assertRaises(HTTPError) as error:
                 urlopen(self.base + "/api/dashboard?" + query)

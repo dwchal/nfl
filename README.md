@@ -9,7 +9,7 @@ Double-click **Start Steelers.command** in Finder. It opens the dashboard in you
 Or use Terminal:
 
 ```sh
-cd ~/Developer/nfl
+cd /Users/dougchallener/github/nfl
 python3 app.py
 ```
 
@@ -22,7 +22,8 @@ On a fresh clone, if Finder does not allow launching the command file, run `pyth
 - A team selector for Steelers or Vikings, with team colors and your choice remembered between visits. Pittsburgh is the default on a first visit.
 - Selected team’s record, winning percentage, point differential, recent form, and Elo rank.
 - Next unplayed matchup, venue, date, Eastern kickoff time, and an estimated win probability.
-- Regular-season win projection from 10,000 simulations, with the middle 80% range and outcome distribution.
+- Predicted final win–loss record from 10,000 simulations, with average wins/losses, the middle 80% range, and the record distribution.
+- Playoff qualification probability, split into division-title and wild-card paths for the selected team.
 - Cumulative point differential, AFC North or NFC North comparison, and a filterable team schedule.
 - Searchable NFL rankings with sortable columns and your selected team highlighted.
 - Season selection, optional postseason results, refresh controls, download timestamp, and offline status.
@@ -50,7 +51,39 @@ The [calibrated 2026 snapshot](docs/calibrated-model-evaluation-2026.json) uses 
 
 A separate [walk-forward audit](docs/calibration-walk-forward.json) reruns the complete selection and deployment policy before each season from 2018–2025. Across **2,127 games**, Brier improves **0.22212 → 0.22193** and log loss **0.63738 → 0.63677**; pick accuracy stays **63.38%**. Both team subsets have slightly lower Brier error, though Pittsburgh pick accuracy falls. A paired week-block bootstrap gives a 95% Brier-difference interval of **−0.00045 to +0.00005**, which includes zero. This remains retrospective research, not a live audit, and those intervals do not account for choosing a method after exploring alternatives. [Research notes](docs/calibration-research.md) record those alternatives and reproduction commands.
 
-For the regular-season outlook, each simulation plays all remaining league games and updates ratings along the simulated path. Future margins are unknown, so simulated updates use wins and losses alone. Results use a fixed random seed for reproducibility. Future ties are not simulated. The model does **not** predict playoff qualification or implement official standings tiebreakers. The experimental matchup model adds player passing history, team efficiency, and rest. In the original QB-aware model, injury reports and weather are displayed and archived as context. The advanced model adds timestamped availability and weather features with training-coverage requirements. Betting markets are not used. Historical evaluation does not guarantee future accuracy; the displayed season range describes simulated outcomes, not validated statistical confidence. Historical summaries and remaining-game estimates use the final available data for the selected season.
+For the regular-season outlook, each simulation plays all remaining league games and updates ratings along the simulated path. Future margins are unknown, so simulated updates use wins and losses alone. Results use a fixed random seed for reproducibility. Future ties are not simulated. The playoff estimate uses those same simulated league results; see the qualification method below. The experimental matchup model adds player passing history, team efficiency, and rest. In the original QB-aware model, injury reports and weather are displayed and archived as context. The advanced model adds timestamped availability and weather features with training-coverage requirements. Betting markets are not used. Historical evaluation does not guarantee future accuracy; the displayed season range describes simulated outcomes, not validated statistical confidence. Historical summaries and remaining-game estimates use the final available data for the selected season.
+
+## Predicted record and playoff chances
+
+**Predicted win–loss record** shows the most frequent final regular-season record
+across the simulations, alongside its probability. Equal-frequency records are
+resolved by closeness to the simulated mean, then fewer wins. Average wins and
+losses describe the full distribution and can be fractional. Existing ties are
+preserved; future ties are not simulated.
+
+**Playoff chances** grades those same simulated seasons. It shows the selected
+team's probability of qualifying, winning its division, earning a wild card,
+and missing the playoffs. The two qualifying paths are mutually exclusive.
+The selected forecast model drives both sections; quarterback what-if controls
+continue to affect only the next-game scenario.
+
+Estimates support the 32-team alignment from 2002 onward, with two wild-card
+places per conference through 2019 and three from 2020. A complete league
+schedule is required; partial fixtures show an explanation instead of a
+percentage. The canceled 2022 Buffalo–Cincinnati game is accounted for.
+A finished season with a full postseason field shows actual qualification
+rather than a simulated historical chance. Postseason scores never change the
+regular-season projection.
+
+Division and wild-card selection follows the result-based portion of the
+[NFL tiebreaking procedures](https://www.nfl.com/standings/tie-breaking-procedures)
+through strength of schedule, including common opponents, conference/division
+records, and restarting reduced tie groups. Division ordering is retained during
+wild-card selection. Any remaining ties are resolved randomly with a separate,
+fixed seed, because future points and touchdowns are not modeled. These are
+approximate model probabilities, not official clinching or elimination claims.
+The [2020 format announcement](https://www.nfl.com/news/owners-approve-expanding-postseason-to-14-teams-0ap3000001107961)
+documents the additional wild-card places.
 
 ## Advanced matchup model
 

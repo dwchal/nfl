@@ -8,6 +8,7 @@ from datetime import date
 
 from .model import (BASELINE, BASE_RATING, HOME_ADVANTAGE, K_FACTOR,
                     home_probability, game_probability, replay_season, select_model, team_key, update_ratings)
+from .playoffs import PlayoffRace
 
 SIMULATIONS = 10000
 AFC_NORTH = {"PIT", "BAL", "CIN", "CLE"}
@@ -63,14 +64,20 @@ def record_table(games, ratings):
     return ranked
 
 
-def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIONS, team="PIT", config=BASELINE, corrections=None):
+def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIONS, team="PIT", config=BASELINE, corrections=None,
+                   season_games=None, season=None, postseason=()):
     """Simulate all remaining REG games, updating ratings along each sample path."""
     rng = random.Random(42)
+    playoff_rng = random.Random(43)
+    if simulations < 1:
+        raise ValueError("At least one season simulation is required.")
+    race = PlayoffRace(season_games, season, team, postseason) if season_games is not None else None
     counts = Counter()
     odds_multipliers = {identifier: math.exp(shift) for identifier, shift in (corrections or {}).items()}
     for _ in range(simulations):
         sample_ratings = ratings.copy()
         sample_wins = wins
+        game_outcomes = {}
         for game in remaining:
             home, away = team_key(game.home), team_key(game.away)
             sample_ratings.setdefault(home, BASE_RATING)
@@ -80,10 +87,14 @@ def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIO
                 multiplier = odds_multipliers.get(game.id, 1)
                 probability = probability * multiplier / (1 - probability + probability * multiplier)
             home_win = rng.random() < probability
+            if race and not race.reason and race.observed is None:
+                game_outcomes[game.id] = home_win
             if (home == team and home_win) or (away == team and not home_win):
                 sample_wins += 1
             # Future margins are unknown: simulated updates use win/loss alone.
             update_ratings(sample_ratings, home, away, float(home_win), game.neutral, config)
+        if race:
+            race.sample(game_outcomes, playoff_rng)
         counts[sample_wins] += 1
     outcomes = sorted(counts)
 
@@ -97,11 +108,18 @@ def project_season(remaining, ratings, wins, losses, ties, simulations=SIMULATIO
 
     team_remaining = sum(team in {g.home, g.away} for g in remaining)
     total_games = wins + losses + ties + team_remaining
-    return {"expected_wins": round(sum(w * n for w, n in counts.items()) / simulations, 1),
+    mean_wins = sum(w * n for w, n in counts.items()) / simulations
+    peak = min(outcomes, key=lambda w: (-counts[w], abs(w - mean_wins), w))
+    return {"expected_wins": round(mean_wins, 1),
+            "expected_losses": round(total_games - ties - mean_wins, 1), "ties": ties,
+            "predicted_record": {"wins": peak, "losses": total_games - ties - peak, "ties": ties,
+                                 "probability": counts[peak] / simulations},
             "low": quantile(.1), "high": quantile(.9), "simulations": simulations,
             "remaining": team_remaining, "total_games": total_games,
             "distribution": [{"wins": w, "losses": total_games - ties - w, "ties": ties,
-                              "probability": round(counts[w] / simulations, 4)} for w in outcomes]}
+                              "probability": round(counts[w] / simulations, 4)} for w in outcomes],
+            "playoffs": race.report(simulations) if race else {
+                "status": "unavailable", "probability": None, "reason": "League schedule was not supplied."}}
 
 
 def default_season(games, today=None):
@@ -180,7 +198,9 @@ def build_dashboard(games, season=None, include_playoffs=False, simulations=SIMU
         from .matchup import logit
         corrections = {g.id: logit(matchup.probability(g, .5)) for g in reg_games if not g.completed}
     projection = project_season([g for g in reg_games if not g.completed], reg_ratings,
-                                regular["wins"], regular["losses"], regular["ties"], simulations, team, config, corrections)
+                                regular["wins"], regular["losses"], regular["ties"], simulations, team, config, corrections,
+                                season_games=reg_games, season=season,
+                                postseason=[g for g in all_season if g.kind != "REG"])
     division = sorted([r for r in rankings if r["team"] in profile["members"]],
                       key=lambda r: (-(r["win_pct"] or 0), -r["differential"], r["team"]))
     completed = [g for g in schedule if g["result"]]
