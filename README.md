@@ -89,7 +89,26 @@ QB controls offer players listed as quarterbacks in the selected season's roster
 
 Weather comes from [Open-Meteo](https://open-meteo.com/) using stadium coordinates derived from [greerreNFL's stadium dataset](https://github.com/greerreNFL/Stadiums). Outdoors/open-roof games within 15 days show forecast temperature and the maximum wind/gusts and total precipitation across the three-hour game window. Enclosed roofs exclude outdoor weather. Unknown stadiums/roof status or unavailable forecasts show an explanation. The forecast and retrieval timestamp are saved, never replaced by observed historical weather for evaluation. Weather provides context only in the original QB-aware model. The advanced model applies learned weather/style interactions when its stricter exposure, lead-time, and training-coverage requirements are met.
 
-While the dashboard is used, eligible next-game forecasts within seven days of kickoff are saved locally to `.cache/forecasts.sqlite3`, with model settings, input-file hashes, assumptions, and weather. Duplicate inputs do not create another record; changed forecasts append a record. Completed games, missing kickoff times, and post-kickoff forecasts are excluded. US Eastern kickoff times are converted using daylight-saving-aware time zones. The interface evaluates the latest saved pre-kickoff forecast per game and model choice after results arrive, and rechecks revised kickoff times. Scenarios never enter this accuracy record. **No background scheduler runs**: open the dashboard or refresh it before games to capture forecasts. Refresh after games to evaluate them. The SQLite archive stays on this computer and is excluded from Git.
+While the dashboard is used, eligible next-game forecasts within seven days of kickoff are saved locally to `.cache/forecasts.sqlite3`, with model settings, input-file hashes, assumptions, and weather. Duplicate inputs do not create another record; changed forecasts append a record. Completed games, missing kickoff times, and post-kickoff forecasts are excluded. US Eastern kickoff times are converted using daylight-saving-aware time zones. The interface retains its **legacy dashboard-use** evaluation of the latest pre-kickoff forecast per game/model, with mixed lead times. Scenarios never enter this accuracy record. The separate collector below provides paired fixed-horizon comparisons. The SQLite archive stays on this computer and is excluded from Git.
+
+## Prospective forecast collection
+
+Capture Elo, QB matchup, and advanced together for every upcoming league game
+within seven days, independently of dashboard visits:
+
+```sh
+python3 -m steelers.capture --once --season 2026          # Refresh inputs and capture
+python3 -m steelers.capture --once --season 2026 --offline # Use saved inputs
+python3 -m steelers.capture --report --season 2026 --offline \
+  --output .cache/paired-report-2026.json
+```
+
+The new archive stores full-precision probabilities, exact model artifacts,
+immutable source/code snapshots, and retrieval/cutoff times. Reports match
+collection runs at the declared **24h** and **1h** deadlines, include explicit
+fallbacks and capture gaps, and separate different artifact sets unless a policy
+was explicitly frozen. No background task is installed by the application.
+See [collection, optional 15-minute scheduling, fixture isolation, and reporting](docs/forecast-collection.md).
 
 ## Other launch options
 
@@ -142,4 +161,4 @@ For a code review and nine prioritized improvement plans, see the
 It includes specific code findings, ordered implementation steps, test cases,
 data requirements, and evaluation gates for each proposal.
 
-`app.py` serves the local interface; `steelers/data.py` downloads and validates schedules; `steelers/model.py` tunes/calibrates Elo; `steelers/evaluation.py` audits Elo calibration; `steelers/experiments.py` runs shared nested chronological model comparisons; `steelers/features.py` loads weekly statistics; `steelers/matchup.py` fits/evaluates the QB challenger; `steelers/advanced.py` evaluates the advanced model; `steelers/pbp.py`, `steelers/evidence.py`, and `steelers/travel.py` prepare its inputs; `steelers/weather.py` loads weather forecasts; `steelers/forecast.py` archives pre-kickoff predictions; `steelers/analysis.py` calculates statistics and projections; `static/` contains the interface; `tests/` verifies calculations, future-result isolation, offline fallback, and HTTP endpoints. The original R/Shiny/Quarto project is retained under `legacy/r/` for reference and is not needed to run the Python app.
+`app.py` serves the local interface; `steelers/data.py` downloads and validates schedules; `steelers/model.py` tunes/calibrates Elo; `steelers/evaluation.py` audits Elo calibration; `steelers/experiments.py` runs shared nested chronological model comparisons; `steelers/capture.py` collects paired league forecasts; `steelers/prediction.py` provides shared full-precision predictions; `steelers/provenance.py` preserves immutable inputs and code; `steelers/features.py` loads weekly statistics; `steelers/matchup.py` fits/evaluates the QB challenger; `steelers/advanced.py` evaluates the advanced model; `steelers/pbp.py`, `steelers/evidence.py`, and `steelers/travel.py` prepare its inputs; `steelers/weather.py` loads weather forecasts; `steelers/forecast.py` archives predictions and grades paired horizons; `steelers/analysis.py` calculates statistics and projections; `static/` contains the interface; `tests/` verifies calculations, future-result isolation, offline fallback, and HTTP endpoints. The original R/Shiny/Quarto project is retained under `legacy/r/` for reference and is not needed to run the Python app.

@@ -15,12 +15,14 @@ from urllib.parse import parse_qs, urlparse
 
 from steelers.analysis import SUPPORTED_TEAMS, build_dashboard, default_season
 from steelers.data import DataUnavailable, ScheduleStore
-from steelers.model import BASE_RATING, game_probability, replay_season, select_model, team_key
+from steelers.model import BASELINE, BASE_RATING, game_probability, replay_season, select_model, team_key
 from steelers.features import FeatureStore
 from steelers.forecast import ForecastArchive, kickoff_utc
 from steelers.matchup import VERSION, evaluate, next_context
 from steelers.weather import WeatherStore
 from steelers.advanced import AdvancedStore, evaluate_advanced
+from steelers.prediction import artifact, code_revision, freeze_inputs, local_sources, predict_game
+from steelers.provenance import SnapshotStore
 
 ROOT = Path(__file__).resolve().parent
 
@@ -143,8 +145,9 @@ def make_handler(store, feature_store=None, archive=None, weather_store=None, ad
                         if matchup_key not in matchup_cache:
                             config, _ = select_model(games, target)
                             rating_games = [g for g in games if g.season != target or phase == "all" or g.kind == "REG"]
-                            matchup_cache[matchup_key] = (evaluate_advanced(rating_games, target, config, bundle, advanced_data)
-                                                         if advanced_data else evaluate(rating_games, target, config, bundle))
+                            fitting_cutoff = datetime.now(timezone.utc)
+                            matchup_cache[matchup_key] = (evaluate_advanced(rating_games, target, config, bundle, advanced_data, as_of_utc=fitting_cutoff)
+                                                         if advanced_data else evaluate(rating_games, target, config, bundle, as_of_utc=fitting_cutoff))
                             if len(matchup_cache) > 8:
                                 matchup_cache.pop(next(iter(matchup_cache)))
                         matchup, pregame = matchup_cache[matchup_key]
@@ -158,13 +161,40 @@ def make_handler(store, feature_store=None, archive=None, weather_store=None, ad
                     if bundle:
                         result["features"] = {"sources": bundle["sources"], "digest": bundle["digest"]}
                     next_game = next((g for g in games if result["next_game"] and g.id == result["next_game"]["id"]), None)
+                    forecast = None
+                    context_prediction = None
+                    as_of = datetime.now(timezone.utc)
+                    if next_game and kickoff_utc(next_game) and as_of < kickoff_utc(next_game):
+                        config, selection = select_model(games, target)
+                        rating_games = [g for g in games if g.season != target or phase == "all" or g.kind == "REG"]
+                        snapshots = SnapshotStore(archive.path.parent / "snapshots") if archive else None
+                        sources = local_sources(store, feature_store, advanced_store if advanced_data else None, bundle or {}, target,
+                                                metadata=metadata, data=advanced_data)
+                        as_of = datetime.now(timezone.utc)
+                        inputs = freeze_inputs(snapshots, rating_games, bundle, advanced_data, as_of, sources,
+                                               {"schedule": metadata, "weather": weather, "phase": phase})
+                        revision = code_revision()
+                        context_family = "advanced" if advanced_data else "matchup"
+                        if matchup:
+                            context_artifact = artifact(context_family, config, matchup, selection, revision, target)
+                            matchup.state = inputs.runtime(context_artifact, as_of, target)[0]
+                            context_prediction = predict_game(next_game, context_artifact, inputs, as_of)
+                        family = context_family if result["model"]["matchup_active"] else "elo"
+                        selected_artifact = artifact(family, BASELINE if model == "baseline" else config,
+                                                     matchup if family != "elo" else None, selection, revision, target)
+                        forecast = predict_game(next_game, selected_artifact, inputs, as_of)
+                        p_team = forecast["home_probability"] if next_game.home == team else 1 - forecast["home_probability"]
+                        result["next_game"] = {**result["next_game"], "win_probability": round(p_team, 4)}
+                        result["schedule"] = [result["next_game"] if row["id"] == next_game.id else row for row in result["schedule"]]
+                        result["forecast"] = forecast
                     if weather:
                         result["weather"] = {**weather, "note": "Issued forecast. The advanced model applies learned weather/style interactions when historical support is sufficient; enclosed or unknown roof exposure is excluded." if model == "advanced" else weather["note"]}
                     if next_game and matchup and matchup.report["status"] == "evaluated":
                         config, _ = select_model(games, target)
                         rating_games = [g for g in games if g.season != target or phase == "all" or g.kind == "REG"]
                         ratings = replay_season(rating_games, target, config)[0]
-                        p_home = game_probability(ratings.get(team_key(next_game.home), BASE_RATING), ratings.get(team_key(next_game.away), BASE_RATING), next_game, config)
+                        p_home = (context_prediction["elo_home_probability"] if context_prediction else
+                                  game_probability(ratings.get(team_key(next_game.home), BASE_RATING), ratings.get(team_key(next_game.away), BASE_RATING), next_game, config))
                         result["matchup"] = next_context(matchup, next_game, p_home, team, bundle,
                                                          query.get("qb", [""])[0], query.get("opponent_qb", [""])[0])
                         if advanced_data:
@@ -175,8 +205,13 @@ def make_handler(store, feature_store=None, archive=None, weather_store=None, ad
                             result["matchup"]["injuries"] = [{**p, "injury": ""} for p in (context["availability"] or {}).get("players", [])]
                     if archive:
                         if next_game and not query.get("qb") and not query.get("opponent_qb"):
-                            archive.save(next_game, team, model, result["next_game"]["win_probability"],
-                                         {"version": matchup.report.get("version", VERSION) if matchup else VERSION, "model": result["model"], "schedule": metadata,
+                            if forecast:
+                                archive.register_artifacts({family: selected_artifact})
+                                archive.register_manifest(inputs.manifest_hash, inputs.manifest, inputs.snapshot_directory)
+                            full_probability = (forecast["home_probability"] if next_game.home == team else 1 - forecast["home_probability"]) if forecast else result["next_game"]["win_probability"]
+                            archive.save(next_game, team, model, full_probability,
+                                         {"version": selected_artifact["payload"]["version"] if forecast else VERSION, "model": result["model"], "schedule": metadata,
+                                          "prediction": {key: value for key, value in forecast.items() if key != "as_of_utc"} if forecast else None,
                                           "feature_sources": bundle["sources"] if bundle else [],
                                           "weather": result.get("weather"),
                                           "matchup": result.get("matchup"), "game": result["next_game"]})

@@ -7,13 +7,16 @@ Corrections are regularized logistic regression, implemented in the stdlib.
 
 import math
 from dataclasses import dataclass
+from zoneinfo import ZoneInfo
 
 from .model import BASE_RATING, historical_offsets, metrics, replay_season, rest_difference, team_key, update_ratings
 from .optimization import fit_logistic_offset
 from .features import feature_key
 from .coverage import sufficient_history, training_coverage
+from .forecast import kickoff_utc
+from .provenance import utc
 
-VERSION = "matchup-v4"
+VERSION = "matchup-v5"
 LABELS = ("Passing offense", "Passing defense", "Rushing offense", "Rushing defense", "Rest advantage", "Quarterback change")
 GROUPS = {"Rest": (4,), "Efficiency + rest": (0, 1, 2, 3, 4), "Efficiency + rest + QB": tuple(range(6))}
 
@@ -114,9 +117,13 @@ class FeatureState:
             self.league = [old + new for old, new in zip(self.league, (row.passing_epa, row.dropbacks, row.rushing_epa, row.carries))]
 
 
-def replay(games, season, config, bundle, state=None):
+def replay(games, season, config, bundle, state=None, *, as_of_utc=None):
     """Return input rows, current state, and Elo; no target's own stats enter it."""
     state, ratings, rows, pending = state or FeatureState(), {}, [], []
+    cutoff = utc(as_of_utc) if as_of_utc is not None else None
+    cutoff_day = cutoff.astimezone(ZoneInfo("America/New_York")).date() if cutoff else None
+    if cutoff:
+        games = [g for g in games if (kickoff_utc(g) < cutoff if kickoff_utc(g) else g.day < cutoff_day)]
     elo_predictions = {p["id"]: p["probability"] for year in range(season - 8, season + 1)
                        for p in replay_season(games, year, config)[2]}
     year = None
@@ -152,9 +159,10 @@ def replay(games, season, config, bundle, state=None):
                      "pbp_covered": all(team_key(t) in getattr(state, "plays", {}).get(game.id, {}) for t in (game.home, game.away))})
         update_ratings(ratings, home, away, result, game.neutral, config, game.home_score - game.away_score)
         pending.append(game)
-    # Future forecasts use all completed games' available statistics.
+    # The final flush obeys the same publication cutoff as the main loop.
     for game in pending:
-        state.observe(game, bundle)
+        if cutoff_day is None or game.day < cutoff_day:
+            state.observe(game, bundle)
     return rows, state, ratings
 
 
@@ -197,8 +205,8 @@ class MatchupModel:
         return corrected(elo_probability, self.state.features(game, home_qb, away_qb), self.weights)
 
 
-def evaluate(games, season, config, bundle):
-    rows, state, _ = replay(games, season, config, bundle)
+def evaluate(games, season, config, bundle, *, as_of_utc=None):
+    rows, state, _ = replay(games, season, config, bundle, as_of_utc=as_of_utc)
     years = list(range(season - 6, season))
     elo_configs = historical_offsets(rows, games, years)
     tuning, tests = years[:3], years[3:]

@@ -18,7 +18,7 @@ from steelers.advanced import (AdvancedModel, AdvancedState, AdvancedStore, LABE
                               WEATHER_START, enabled_indices, evaluate_advanced)
 from steelers.data import ScheduleStore
 from steelers.evidence import AVAILABILITY_VERSION, Evidence, EvidenceStore, availability_complete
-from steelers.features import feature_key
+from steelers.features import QBWeek, feature_key
 from steelers.forecast import kickoff_utc
 from steelers.matchup import corrected, explain, fit, replay
 from steelers.model import BASELINE
@@ -330,14 +330,16 @@ class AdvancedServerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "games.csv"
             path.write_text("game_id,season,game_type,week,gameday,gametime,home_team,away_team,home_score,away_score\n"
+                            "prior,2026,REG,1,2026-09-01,13:00,PIT,MIN,24,10\n"
                             f"next,2026,REG,5,{(now + timedelta(days=1)).date()},13:00,PIT,MIN,,\n")
-            bundle = bundle_for([])
+            bundle = bundle_for([fixture("prior")])
+            bundle["player"][(2026, 1, "REG", "PIT")] = [QBWeek("starter", "Starter", 100, 35), QBWeek("backup", "Backup", -100, 10)]
             bundle["rosters"] = [{"team": "PIT", "position": "QB", "gsis_id": p, "full_name": p} for p in ("starter", "backup")]
             from types import SimpleNamespace
             features = SimpleNamespace(load=lambda *args: bundle)
             advanced = AdvancedStore(Path(directory) / "advanced", True)
-            def evaluation(games, season, config, bundle, data):
-                state = AdvancedState(evidence=data["evidence"])
+            def evaluation(games, season, config, bundle, data, *, as_of_utc=None):
+                state = AdvancedState(evidence=data["evidence"], now=as_of_utc)
                 state.qbs = {"starter": (100, 200), "backup": (-100, 200)}
                 state.last_qb["PIT"] = ("starter", "Starter")
                 weights = [0.] * len(LABELS)

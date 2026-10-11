@@ -17,7 +17,7 @@ from .matchup import (FeatureState, MatchupModel, LABELS as BASE_LABELS,
 from .model import historical_offsets, metrics, select_model, team_key
 from .pbp import PBPStore
 
-VERSION = "advanced-v4"
+VERSION = "advanced-v5"
 LABELS = BASE_LABELS + tuple(f"Situational {side}: {label}" for side in ("offense", "defense") for label in pbp.LABELS) + travel.LABELS + (
     "Wind × passing reliance", "Rain × passing reliance", "Cold × passing reliance",
     "Unavailable receivers", "Unavailable offensive line", "Unavailable defenders", "Questionable players")
@@ -191,9 +191,9 @@ def enabled_indices(rows, contexts):
                             "variation": variation, "minimum_games": 100, "minimum_zero_and_nonzero": 20}
 
 
-def evaluate_advanced(games, season, config, bundle, data):
-    state = AdvancedState(data.get("plays"), data.get("evidence"))
-    rows, state, _ = replay(games, season, config, bundle, state)
+def evaluate_advanced(games, season, config, bundle, data, *, as_of_utc=None):
+    state = AdvancedState(data.get("plays"), data.get("evidence"), now=as_of_utc)
+    rows, state, _ = replay(games, season, config, bundle, state, as_of_utc=as_of_utc)
     years = list(range(season - 6, season))
     regular = [r for r in rows if r["kind"] == "REG" and r["season"] in years]
     # Every training/evaluation Elo offset is itself selected using older years.

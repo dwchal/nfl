@@ -3,10 +3,11 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Items 1–3 have been implemented as recorded below in the
+documentation only. Items 1–4 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
 [input-quality record](#item-2-implementation-record) and
-[chronological evaluation record](#item-3-implementation-record); items 4–9 remain proposed.
+[chronological evaluation record](#item-3-implementation-record) and
+[prospective collection record](#item-4-implementation-record); items 5–9 remain proposed.
 
 The highest priorities are reliable optimization, honest missing-data handling,
 and consistent chronological evaluation. After those foundations, test starter
@@ -948,5 +949,54 @@ tests. JavaScript syntax and Git whitespace checks pass. Two independent local
 CLI runs produce byte-identical 1,359-game reports; their implementation hashes
 match the committed Python sources. No downloads or forecast captures are needed.
 
-The next planned priority is item 4: collect comparable prospective forecasts at
-explicit prediction times across the league.
+## Item 4 implementation record
+
+`python3 -m steelers.capture --once --season 2026` now collects all upcoming
+league games within seven days, pairing Elo, QB matchup and advanced from one
+input manifest and cutoff. `--offline` uses local snapshots. The shared
+`steelers/prediction.py` service is also used by the HTTP path. It returns
+unrounded probabilities, model/input/feature identities, evidence and explicit
+fallbacks; the UI alone rounds estimates.
+
+Required aware cutoffs bound live state and evidence. The pending-statistics
+flush now respects the same next-calendar-day publication rule as replay, and
+future completed rows cannot enter current ratings/features. Model versions are
+`matchup-v5` and `advanced-v5`. Source bytes and normalized inputs are immutable
+SHA-256 blobs with durable first-observed timestamps. Stable historical inputs
+are split by season to avoid copying all history for each weather update.
+The process's actual Python sources are pinned alongside inputs, with Git and
+source-code hashes in each model artifact. Historical training data remain
+explicitly reconstructed history.
+
+New archive tables store atomic paired collections, full-precision forecasts,
+registered artifacts/manifests, and optional frozen policies. All old dashboard
+rows remain in their original table under a legacy label. Collection completion
+is stamped after calculation; a slow run cannot pretend it finished before a
+deadline. Retries deduplicate within a 15-minute UTC slot; later slots remain
+available even when inputs do not change. Fixture schedules require a separate
+database and are labeled reconstructed, with no live evidence capture.
+
+`--report` grades the latest paired run at/before the 24h or 1h deadline,
+within the declared two-hour or 30-minute tolerance. It rechecks revised
+kickoffs, deduplicates team views, and reports gaps instead of substituting late
+forecasts. Different artifacts stay separate unless an explicitly frozen policy
+allowlist was registered before collection. Reports include paired probability
+scores, team subsets, fallbacks, uncertainty and changed picks.
+
+See [the collector guide](forecast-collection.md) for commands, optional
+15-minute cron setup, frozen policies, local storage and fixture isolation.
+No scheduler is installed automatically. An offline verification run saved
+45 predictions for 15 upcoming games; all 65 already-completed games correctly
+have missing fixed-horizon captures. Earlier snapshots and historical results
+were preserved. Tests cover cutoff mutations, full precision, atomicity,
+deadlines, revisions, stale/late gaps, missing artifacts/manifests, retries,
+policy pooling, fixture isolation and old-row retention.
+
+**Validation.** All 136 tests pass on Python 3.14.7, including the updated HTTP
+integration tests. Git whitespace and JavaScript syntax checks pass. The
+[collection verification](forecast-collection-verification.json) records a real
+offline capture and its horizon coverage. All 45 probabilities and feature
+digests reproduce exactly from the saved immutable inputs and artifacts.
+
+The next planned priority is item 5: model quarterback uncertainty and rushing
+contribution.

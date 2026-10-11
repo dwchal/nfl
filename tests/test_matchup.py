@@ -216,8 +216,10 @@ class ScenarioServerTests(unittest.TestCase):
             path = Path(directory)/"games.csv"
             future_day = (datetime.now(timezone.utc)+timedelta(days=1)).date().isoformat()
             path.write_text("game_id,season,game_type,week,gameday,gametime,home_team,away_team,home_score,away_score,home_rest,away_rest\n"
-                            f"next,2026,REG,1,{future_day},13:00,PIT,MIN,,,10,7\n")
-            bundle = bundle_for([])
+                            "prior,2026,REG,1,2026-09-01,13:00,PIT,MIN,24,10,7,7\n"
+                            f"next,2026,REG,2,{future_day},13:00,PIT,MIN,,,10,7\n")
+            bundle = bundle_for([fixture("prior")])
+            bundle["player"][(2026, 1, "REG", "PIT")] = [QBWeek("starter", "Starter", 100, 35), QBWeek("backup", "Backup", -100, 10)]
             bundle["rosters"] = [{"team":"PIT","position":"QB","gsis_id":"starter","full_name":"Starter"},
                                  {"team":"PIT","position":"QB","gsis_id":"backup","full_name":"Backup"}]
             state = FeatureState()
@@ -250,7 +252,10 @@ class ScenarioServerTests(unittest.TestCase):
                     self.assertAlmostEqual(selected["next_game"]["win_probability"],selected["matchup"]["default_probability"],places=4)
                     self.assertEqual(evaluation.call_count,1)
                     with archive.connect() as connection:
-                        payload = json.loads(connection.execute("SELECT payload FROM forecasts LIMIT 1").fetchone()[0])
+                        stored_probability, raw_payload = connection.execute("SELECT probability,payload FROM forecasts WHERE choice='auto' LIMIT 1").fetchone()
+                        payload = json.loads(raw_payload)
+                        self.assertEqual(stored_probability, original["forecast"]["home_probability"])
+                        self.assertEqual(connection.execute("SELECT count(*) FROM model_artifacts").fetchone()[0], 2)
                     self.assertIn("sha256",payload["schedule"])
                     self.assertIn("features",payload["matchup"])
                 finally:

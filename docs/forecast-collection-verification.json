@@ -1,0 +1,42 @@
+{
+  "season": 2026,
+  "input_cutoff": "2026-10-11T00:10:02.046511+00:00",
+  "collection_completed_at": "2026-10-11T00:10:03.274075+00:00",
+  "input_type": "prospective_local_snapshot",
+  "games_captured": 15,
+  "forecasts_verified": 45,
+  "replay_from_immutable_snapshots_identical": true,
+  "manifest_hash": "842d313851463bfdad809f5bed9b30148b72518d3ba9c483305b94214e96ff37",
+  "artifact_ids": {
+    "elo": "a48d3d2a9438f65baedf3e1a4131afdbd589428459b52ca211dff3e67166c8ff",
+    "matchup": "188cdd068b61adb0e5ce67350585457a5667a020bf3f777b2e59eb7a3217c653",
+    "advanced": "7e45f7c743236ec32dd665eac36725237f07ac1905f6f75ffe99a954f700ec17"
+  },
+  "model_versions": {
+    "elo": "elo-v1",
+    "matchup": "matchup-v5",
+    "advanced": "advanced-v5"
+  },
+  "code_revision": {
+    "git_commit": "e4c35ae0d056d2a6022fa550b13518fb6b79fd1b",
+    "source_sha256": "aa6900fbd90779f71689b74cfe2f847d8c9a30559b9885ea88aa6d1de1fd2747"
+  },
+  "revision_note": "Captured during implementation; exact Python sources and source hash are preserved with the inputs.",
+  "fixed_horizon_report": {
+    "24h": {
+      "eligible_completed_games": 65,
+      "paired_games": 0,
+      "capture_gaps": 65
+    },
+    "1h": {
+      "eligible_completed_games": 65,
+      "paired_games": 0,
+      "capture_gaps": 65
+    }
+  },
+  "scheduler_installed": false,
+  "storage": {
+    "archive": ".cache/forecasts.sqlite3",
+    "snapshots": ".cache/snapshots"
+  }
+}
