@@ -1,0 +1,20 @@
+{
+  "version": "margin-ranking-v1",
+  "history_start": 2010,
+  "evaluation_seasons": [2021, 2022, 2023, 2024, 2025],
+  "bootstrap_samples": 1000,
+  "candidates": [
+    {"id": "margin-8-4-21", "half_life_weeks": 8, "ridge": 4, "margin_cap": 21},
+    {"id": "margin-8-4-42", "half_life_weeks": 8, "ridge": 4, "margin_cap": 42},
+    {"id": "margin-8-12-21", "half_life_weeks": 8, "ridge": 12, "margin_cap": 21},
+    {"id": "margin-8-12-42", "half_life_weeks": 8, "ridge": 12, "margin_cap": 42},
+    {"id": "margin-16-4-21", "half_life_weeks": 16, "ridge": 4, "margin_cap": 21},
+    {"id": "margin-16-4-42", "half_life_weeks": 16, "ridge": 4, "margin_cap": 42},
+    {"id": "margin-16-12-21", "half_life_weeks": 16, "ridge": 12, "margin_cap": 21},
+    {"id": "margin-16-12-42", "half_life_weeks": 16, "ridge": 12, "margin_cap": 42},
+    {"id": "margin-32-4-21", "half_life_weeks": 32, "ridge": 4, "margin_cap": 21},
+    {"id": "margin-32-4-42", "half_life_weeks": 32, "ridge": 4, "margin_cap": 42},
+    {"id": "margin-32-12-21", "half_life_weeks": 32, "ridge": 12, "margin_cap": 21},
+    {"id": "margin-32-12-42", "half_life_weeks": 32, "ridge": 12, "margin_cap": 42}
+  ]
+}

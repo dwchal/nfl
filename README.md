@@ -33,6 +33,13 @@ The default season follows the NFL calendar (January–February belong to the pr
 
 ## Data and model
 
+Model comparisons now report **ROC AUC** alongside winner-pick accuracy,
+Brier error and log loss. The [AUC investigation](docs/auc-research.md) audits
+2021–2025 predictions and tests an opponent-adjusted scoring-margin model.
+The requested 0.80 target was not reached: selected Elo scores 0.685 and the
+best existing feature candidate scores 0.691. The new experiment is not
+promoted; the default remains unchanged.
+
 Schedules and scores come directly from [nflverse’s games.csv](https://github.com/nflverse/nfldata/blob/master/data/games.csv), the schedule feed used by the original R project. Downloads are validated and cached in `.cache/games.csv`. Data is refreshed when requested after an hour, or immediately using **Refresh data**. An unsuccessful download preserves the last valid snapshot and shows a warning. Provider update delays can affect scores and kickoff times; this is not a live play-by-play feed. Data remains subject to the provider’s terms.
 
 The **backtested default** adds scoring-margin weighting to Elo, followed by a gated confidence and rest calibration. Large wins have more influence, with logarithmic scaling and a correction for strong favorites beating weaker teams. The weighting is inspired by [FiveThirtyEight’s published NFL Elo approach](https://github.com/fivethirtyeight/nfl-elo-game/blob/master/forecast.py); this is our own implementation and evaluation, not FiveThirtyEight’s complete model.

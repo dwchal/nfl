@@ -14,7 +14,36 @@ from dataclasses import asdict
 from pathlib import Path
 
 from .data import parse_games
-from .model import ModelConfig, backtest, metrics, select_model
+from .model import ModelConfig, backtest, metrics, roc_auc, select_model
+
+
+def auc_uncertainty(baseline, candidate, samples=2000):
+    """Paired week-block intervals for AUC and its candidate-minus-Elo change."""
+    if samples < 1 or not baseline or [(r["id"], r["result"]) for r in baseline] != [(r["id"], r["result"]) for r in candidate]:
+        raise ValueError("AUC comparison requires matching nonempty games and positive samples")
+    blocks = defaultdict(list)
+    for old, new in zip(baseline, candidate):
+        blocks[(old["season"], old["week"])].append((old, new))
+    values, rng = list(blocks.values()), random.Random(42)
+    draws, deltas = [], []
+    for _ in range(samples):
+        pairs = [pair for _ in values for pair in rng.choice(values)]
+        old, new = roc_auc([p[0] for p in pairs]), roc_auc([p[1] for p in pairs])
+        if old is not None and new is not None:
+            draws.append(new)
+            deltas.append(new - old)
+
+    def interval(values):
+        ordered = sorted(values)
+        return ([ordered[int(.025 * len(values))], ordered[min(len(values) - 1, int(.975 * len(values)))]]
+                if values else None)
+
+    old, new = roc_auc(baseline), roc_auc(candidate)
+    return {"method": "Paired season/week block bootstrap; tied games excluded; home-win orientation.",
+            "samples": samples, "valid_samples": len(draws), "seed": 42,
+            "roc_auc": new, "interval_95": interval(draws),
+            "delta": new - old if old is not None and new is not None else None,
+            "delta_interval_95": interval(deltas)}
 
 
 def paired_uncertainty(baseline, candidate, samples=2000):
