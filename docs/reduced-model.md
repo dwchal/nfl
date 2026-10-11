@@ -43,7 +43,9 @@ outer season, identical game sets. v1 configurations still validate and run,
 producing identical per-game output.
 
 1. **Feature registry.** `steelers/advanced.py` names every advanced feature in
-   `REGISTRY` and declares groups by label: `full` (34 labels, still subject to
+   `REGISTRY` and declares groups by label: `full` (at the time of this report
+   the 34 passing-only labels, now named `full_passing` since
+   [`advanced-v6`](quarterback-model.md) appended QB rushing; still subject to
    the weather/availability support gates), `qb_weekly_travel` (weekly
    pass/rush offense and defense, QB change, five travel features),
    `qb_situational_travel` (QB change, 16 situational features, travel), and

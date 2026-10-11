@@ -204,17 +204,92 @@ class Evidence:
                       and (max_age is None or cutoff - timestamp(r["available_at"]) <= max_age)]
         return candidates[-1] if candidates else None
 
-    def quarterback(self, game, team, fallback, cutoff):
-        confirmed = self.latest("confirmed_qb", f"{game.id}:{team_key(team)}", cutoff)
-        if confirmed:
-            return confirmed
-        depth = self.latest("depth", team_key(team), cutoff, timedelta(days=7))
+    def quarterback_candidates(self, game, team, fallback, cutoff, estimator=None):
+        """Ordered starter possibilities with probabilities summing to one.
+
+        Evidence classes: ``confirmed`` (user confirmation), ``projected``
+        (rank-one eligible depth entry) and ``previous`` (last leading passer).
+        A later definitive Out/Inactive record invalidates an earlier
+        confirmation; the conflict is reported, never silently erased. Depth
+        membership rejects a departed previous passer; without membership the
+        fallback is labeled unverified. ``estimator(class)`` may return earlier
+        observed frequencies; otherwise the top candidate is deterministic and
+        the alternatives are exposed with probability zero.
+        """
+        key = team_key(team)
+        confirmed = self.latest("confirmed_qb", f"{game.id}:{key}", cutoff)
+        depth = self.latest("depth", key, cutoff, timedelta(days=7))
         availability = self.latest("availability", game.id, cutoff, timedelta(days=7)) or {}
-        unavailable = {r["id"] for r in availability.get("players", []) if r["team"] == team_key(team) and r["status"].lower() in {"out", "inactive"}}
-        if depth:
-            for player in depth["players"]:
-                if player["id"] not in unavailable:
-                    return {**player, "status": "Projected", "source": depth["source"], "available_at": depth["available_at"]}
-        if fallback[0] in unavailable:
-            return {"id": "", "name": "Unknown available starter", "status": "Unknown", "source": "Previous passer ruled out"}
-        return {"id": fallback[0], "name": fallback[1] or "Unknown", "status": "Previous passer", "source": "Prior game statistics"}
+        unavailable = {r["id"] for r in availability.get("players", [])
+                       if r["team"] == key and r["status"].lower() in {"out", "inactive"}}
+        conflicts = []
+        if confirmed and confirmed["id"] in unavailable and timestamp(availability["available_at"]) > timestamp(confirmed["available_at"]):
+            conflicts.append({"kind": "confirmation_ruled_out", "id": confirmed["id"], "name": confirmed["name"],
+                              "confirmed_at": confirmed["available_at"], "report_at": availability["available_at"]})
+            confirmed = None
+        listed = [p for p in depth["players"]] if depth else []
+        eligible = [p for p in listed if p["id"] not in unavailable]
+        membership = {p["id"] for p in listed} if depth else None
+
+        def candidate(player, status, source, when, rank=None):
+            return {"id": player["id"], "name": player["name"], "evidence_status": status, "source": source,
+                    "evidence_time": when, "rank": rank, "probability": 0.}
+
+        unknown = {"id": "", "name": "Unknown available starter", "evidence_status": "Unknown", "source": "",
+                   "evidence_time": None, "rank": None, "probability": 0.}
+        if confirmed:
+            evidence_class, top = "confirmed", candidate(confirmed, "User-confirmed", confirmed.get("source", ""), confirmed["available_at"])
+            alternatives = [candidate(p, "Projected", depth["source"], depth["available_at"], p["rank"]) for p in eligible if p["id"] != confirmed["id"]]
+        elif eligible:
+            evidence_class = "projected"
+            top = candidate(eligible[0], "Projected", depth["source"], depth["available_at"], eligible[0]["rank"])
+            alternatives = [candidate(p, "Projected", depth["source"], depth["available_at"], p["rank"]) for p in eligible[1:]]
+        else:
+            evidence_class, alternatives = "previous", []
+            if fallback[0] in unavailable:
+                top, unknown = None, {**unknown, "source": "Previous passer ruled out"}
+            elif membership is not None and fallback[0] not in membership:
+                top, unknown = None, {**unknown, "source": "Previous passer not on the current depth chart; all listed quarterbacks ruled out" if listed else "Previous passer not on the current depth chart"}
+            else:
+                status = "Previous passer" if membership is not None else "Previous passer (unverified)"
+                top = {"id": fallback[0], "name": fallback[1] or "Unknown", "evidence_status": status, "source": "Prior game statistics",
+                       "evidence_time": None, "rank": None, "probability": 0.}
+        # Depth ranks resolve the learned categories; ties split equally.
+        frequencies = estimator(evidence_class) if estimator and top is not None else None
+        if top is None:
+            candidates = [{**unknown, "probability": 1.}]
+        elif frequencies is None:
+            candidates = [{**top, "probability": 1.}, *alternatives, unknown]
+        else:
+            candidates = [{**top, "probability": frequencies["top"]}, *alternatives, unknown]
+            groups = {"rank2": [c for c in alternatives if c["rank"] == 2],
+                      "rank3": [c for c in alternatives if c["rank"] is not None and c["rank"] >= 3]}
+            unresolved = frequencies["unknown"]
+            for category, members in groups.items():
+                if members:
+                    for member in members:
+                        member["probability"] += frequencies[category] / len(members)
+                else:
+                    unresolved += frequencies[category]
+            candidates[-1]["probability"] = unresolved
+            total = sum(c["probability"] for c in candidates)
+            for member in candidates:
+                member["probability"] /= total
+        return {"class": evidence_class, "candidates": candidates, "conflicts": conflicts,
+                "support": None if frequencies is None else frequencies.get("examples")}
+
+    def quarterback(self, game, team, fallback, cutoff):
+        """Compatibility view: the leading candidate in the earlier record shape."""
+        return top_record(self.quarterback_candidates(game, team, fallback, cutoff))
+
+
+def top_record(resolved):
+    top = resolved["candidates"][0]
+    status = {"User-confirmed": "User-confirmed", "Projected": "Projected", "Unknown": "Unknown"}.get(
+        top["evidence_status"], "Previous passer")
+    record = {"id": top["id"], "name": top["name"], "status": status, "source": top["source"]}
+    if top["evidence_time"]:
+        record["available_at"] = top["evidence_time"]
+    if resolved["conflicts"]:
+        record["conflicts"] = resolved["conflicts"]
+    return record

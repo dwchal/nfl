@@ -170,7 +170,11 @@ exact settings, coverage fallbacks, and source hashes in the
 [full report](docs/chronological-evaluation.json). A second experiment,
 [reduced correction models and an Elo blend](docs/reduced-model.md), compares
 four feature groups at three penalties under the same protocol; none is
-promoted, and the application default stays Elo.
+promoted, and the application default stays Elo. A third,
+[starter uncertainty and QB rushing](docs/quarterback-model.md), adds ordered
+starter evidence, candidate lists and conditional forecasts to the advanced
+model; the probability mixture and rushing feature did not change accuracy and
+are not deployed.
 
 ```sh
 python3 -m steelers.experiments --data .cache/games.csv \

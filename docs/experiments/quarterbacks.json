@@ -1,0 +1,21 @@
+{
+  "version": "chronological-v2",
+  "history_start": 2016,
+  "evaluation_seasons": [2021, 2022, 2023, 2024, 2025],
+  "cutoff_policy": "kickoff_previous_day",
+  "inner_seasons": 2,
+  "min_training_seasons": 3,
+  "max_training_seasons": 6,
+  "minimum_games": 200,
+  "minimum_coverage": 0.95,
+  "bootstrap_samples": 2000,
+  "seed": 42,
+  "gate": "both_probability_scores",
+  "candidates": [
+    {"id": "elo", "family": "elo"},
+    {"id": "passing-deterministic", "family": "advanced", "features": "full_passing", "starters": "deterministic", "penalty": 0.1},
+    {"id": "passing-mixture", "family": "advanced", "features": "full_passing", "starters": "mixture", "penalty": 0.1},
+    {"id": "rushing-deterministic", "family": "advanced", "features": "full", "starters": "deterministic", "penalty": 0.1},
+    {"id": "rushing-mixture", "family": "advanced", "features": "full", "starters": "mixture", "penalty": 0.1}
+  ]
+}

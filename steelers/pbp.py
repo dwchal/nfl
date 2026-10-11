@@ -15,7 +15,8 @@ from urllib.request import urlopen
 
 from .model import team_key
 
-VERSION = "situations-v1"
+VERSION = "situations-v2"
+VERSIONS = ("situations-v1", VERSION)
 LABELS = ("Pass EPA", "Pass success", "Rush EPA", "Rush success", "Sack rate",
           "Early-down EPA", "Third/fourth-and-long success", "Pass reliance")
 SCALES = (.15, .1, .15, .1, .04, .15, .15, .15)
@@ -31,8 +32,17 @@ def number(row, name):
     return value
 
 
+def identifier_text(row, name):
+    value = (row.get(name) or "").strip()
+    return "" if value.upper() in {"", "NA", "NAN", "NONE"} else value
+
+
 def aggregate(rows, season):
     totals = defaultdict(lambda: [[0., 0.] for _ in LABELS])
+    # Separate QB rushing by game and rusher: identified scrambles and designed
+    # runs by a player who also threw a pass in that game. Verification against
+    # weekly QB positions happens at feature time; ambiguous rushers are omitted.
+    rushing_plays, passers = defaultdict(lambda: defaultdict(lambda: [0., 0.])), defaultdict(set)
     seen, included = set(), 0
     for row in rows:
         identifier = row["game_id"]
@@ -46,7 +56,8 @@ def aggregate(rows, season):
             continue
         if any(number(row, k) == 1 for k in ("qb_kneel", "qb_spike", "no_play")):
             continue
-        passing = number(row, "pass_attempt") == 1 or number(row, "sack") == 1 or number(row, "qb_scramble") == 1
+        scramble = number(row, "qb_scramble") == 1
+        passing = number(row, "pass_attempt") == 1 or number(row, "sack") == 1 or scramble
         rushing = number(row, "rush_attempt") == 1 and not passing
         if not (passing or rushing) or row.get("play_type") == "no_play":
             continue
@@ -57,7 +68,15 @@ def aggregate(rows, season):
         # Exclude late blowout situations using the pre-play score, never final score.
         if remaining is not None and margin is not None and 0 <= remaining <= 900 and abs(margin) > 16:
             continue
-        target = totals[(identifier, team_key(row["posteam"]))]
+        team = team_key(row["posteam"])
+        passer, rusher = identifier_text(row, "passer_player_id"), identifier_text(row, "rusher_player_id")
+        if passer and not scramble:
+            passers[identifier].add(passer)
+        if rusher and (scramble or rushing):
+            carry = rushing_plays[identifier][(team, rusher, scramble)]
+            carry[0] += epa
+            carry[1] += 1
+        target = totals[(identifier, team)]
         observations = {7: float(passing)}
         if passing:
             observations.update({0: epa, 1: float(epa > 0), 4: float(number(row, "sack") == 1)})
@@ -73,13 +92,23 @@ def aggregate(rows, season):
         included += 1
     if not totals or included < 1:
         raise ValueError("No valid competitive plays")
+    qb_rushing = {}
+    for identifier, carries in rushing_plays.items():
+        for (team, rusher, scramble), (epa, count) in carries.items():
+            if scramble or rusher in passers[identifier]:
+                entry = qb_rushing.setdefault(identifier, {}).setdefault(rusher, {"team": team, "epa": 0., "carries": 0.})
+                if entry["team"] != team:
+                    raise ValueError("A rusher cannot carry for both teams in one game")
+                entry["epa"] += epa
+                entry["carries"] += count
     return {"version": VERSION, "season": season, "plays": included,
             "games": {identifier: {team: values for (game, team), values in totals.items() if game == identifier}
-                      for identifier in sorted({game for game, _ in totals})}}
+                      for identifier in sorted({game for game, _ in totals})},
+            "qb_rushing": {identifier: dict(sorted(qb_rushing[identifier].items())) for identifier in sorted(qb_rushing)}}
 
 
 def validate(payload, season):
-    if payload.get("version") != VERSION or payload.get("season") != season or not payload.get("games"):
+    if payload.get("version") not in VERSIONS or payload.get("season") != season or not payload.get("games"):
         raise ValueError("Invalid play-by-play aggregate")
     for identifier, teams in payload["games"].items():
         if not identifier.startswith(f"{season}_"):
@@ -90,6 +119,17 @@ def validate(payload, season):
             for pair in values:
                 if len(pair) != 2 or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in pair) or pair[1] < 0:
                     raise ValueError("Invalid aggregate values")
+    # v1 aggregates carry no QB rushing; the feature then lacks support.
+    if payload["version"] == VERSION and not isinstance(payload.get("qb_rushing"), dict):
+        raise ValueError("Missing QB rushing aggregate")
+    for identifier, rushers in payload.get("qb_rushing", {}).items():
+        if identifier not in payload["games"]:
+            raise ValueError("QB rushing for an unknown game")
+        for rusher, entry in rushers.items():
+            if (not rusher or set(entry) != {"team", "epa", "carries"} or entry["team"] not in payload["games"][identifier]
+                    or not all(isinstance(entry[k], (int, float)) and math.isfinite(entry[k]) for k in ("epa", "carries"))
+                    or entry["carries"] < 0 or entry["carries"] != int(entry["carries"])):
+                raise ValueError("Invalid QB rushing values")
     return payload
 
 

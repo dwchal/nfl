@@ -22,7 +22,7 @@ from .evaluation import paired_uncertainty
 from .evidence import Evidence, timestamp
 from .features import VERSION as WEEKLY_VERSION, parse_feature_csv
 from .forecast import kickoff_utc
-from .matchup import LABELS as MATCHUP_LABELS, corrected, fit_correction, replay
+from .matchup import LABELS as MATCHUP_LABELS, corrected_mixture, fit_correction, replay
 from .model import ModelConfig, chronological_forecasts, metrics, reliability_bins
 from .optimization import CLIP_BOUND
 from .pbp import validate as validate_pbp
@@ -83,11 +83,13 @@ def validate_config(config):
         seen.add(identifier)
         keys = {"id", "family"} if family == "elo" else {"id", "family", "penalty"}
         if family == "advanced" and extended:
-            keys |= {"features"}
-        if not keys - {"features"} <= set(candidate) <= keys:
+            keys |= {"features", "starters"}
+        if not keys - {"features", "starters"} <= set(candidate) <= keys:
             raise ValueError("Invalid candidate settings")
         if candidate.get("features", "full") not in FEATURE_GROUPS:
             raise ValueError("Unknown advanced feature group: " + str(candidate.get("features")))
+        if candidate.get("starters", "deterministic") not in {"deterministic", "mixture"}:
+            raise ValueError("starters must be deterministic or mixture")
         if family != "elo" and (type(candidate["penalty"]) not in (int, float)
                                 or not math.isfinite(candidate["penalty"]) or candidate["penalty"] <= 0):
             raise ValueError("Correction penalties must be finite and positive")
@@ -116,7 +118,7 @@ def load_inputs(schedule, features, advanced, history_start, end):
         raise ValueError("A local schedule is required")
     games = parse_games(raw.decode("utf-8-sig"))
     bundle = {"team": {}, "player": {}, "schema": WEEKLY_VERSION}
-    plays, evidence = {}, Evidence()
+    plays, rushing, evidence = {}, {}, Evidence()
     for year in range(max(1999, history_start - 8), end + 1):
         for kind, prefix in (("team", "stats_team"), ("player", "stats_player")):
             filename = f"{prefix}_week_{year}.csv"
@@ -131,7 +133,9 @@ def load_inputs(schedule, features, advanced, history_start, end):
             content = read(advanced / filename, "advanced/" + filename)
             if content is not None:
                 try:
-                    plays.update(validate_pbp(json.loads(content), year)["games"])
+                    payload = validate_pbp(json.loads(content), year)
+                    plays.update(payload["games"])
+                    rushing.update(payload.get("qb_rushing", {}))
                 except (ValueError, TypeError, KeyError) as error:
                     sources[-1].update(status="invalid", reason=str(error))
     if advanced is not None:
@@ -156,7 +160,7 @@ def load_inputs(schedule, features, advanced, history_start, end):
             sources.append({"file": "advanced/evidence.sqlite3", "sha256": None, "status": "missing"})
     code = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(Path(__file__).parent.glob("*.py"))}
     manifest = {"sources": sources, "code": code, "weekly_schema": WEEKLY_VERSION}
-    return games, bundle, {"plays": plays, "evidence": evidence}, manifest
+    return games, bundle, {"plays": plays, "qb_rushing": rushing, "evidence": evidence}, manifest
 
 
 class ReplayRows:
@@ -182,7 +186,8 @@ class ReplayRows:
                 # Reconstruct at kickoff independently of the wall clock used
                 # by the live dashboard's min(kickoff, now) cutoff.
                 state = (AdvancedState(self.data.get("plays"), self.data.get("evidence"),
-                                       now=datetime.max.replace(tzinfo=timezone.utc)) if family == "advanced" else None)
+                                       now=datetime.max.replace(tzinfo=timezone.utc),
+                                       qb_rushing=self.data.get("qb_rushing")) if family == "advanced" else None)
                 rows, state, _ = replay([g for g in self.games if g.season <= year], year,
                                         ModelConfig(**self.configs[str(year)]), self.bundle, state)
                 self.cache[key] = [{**r, "elo_config": self.configs[str(year)]} for r in rows
@@ -199,11 +204,18 @@ class Fitted:
 
 
 class Adapter:
-    """Fit specified previous seasons without running another evaluation."""
+    """Fit specified previous seasons without running another evaluation.
+
+    v1 advanced candidates mean the passing-only label set with deterministic
+    starters, so earlier reports keep their meaning; v2 declares both.
+    """
 
     def __init__(self, candidate, replay_rows, protocol):
         self.candidate, self.replay, self.protocol = candidate, replay_rows, protocol
         self.family = candidate["family"]
+        legacy = protocol["version"] == VERSIONS[0]
+        self.group = candidate.get("features", "full_passing" if legacy else "full")
+        self.mixture = candidate.get("starters", "deterministic") == "mixture"
         self.cache = {}
 
     def fit(self, previous_years):
@@ -236,7 +248,7 @@ class Adapter:
                     labels = ADVANCED_LABELS
                     indices, report["support"] = enabled_indices(train, self.replay.contexts)
                     # Support gates still apply; a declared group can only remove coefficients.
-                    declared = set(group_indices(self.candidate.get("features", "full")))
+                    declared = set(group_indices(self.group))
                     indices = tuple(i for i in indices if i in declared)
                 if any(len(r["features"]) != len(labels) for r in train):
                     raise ValueError("Training rows do not match the feature registry width")
@@ -266,7 +278,7 @@ class Adapter:
                     reason = "No earlier PBP observations for one or both teams."
             probability = row["probability"]
             if self.family != "elo" and reason is None:
-                probability = corrected(probability, row["features"], fitted.weights)
+                probability = corrected_mixture(probability, row["features"], row.get("scenarios") if self.mixture else None, fitted.weights)
             predictions.append({**row, "probability": probability, "fallback_reason": reason,
                                 "fit_id": fitted.report["fit_id"]})
         return predictions
@@ -277,11 +289,11 @@ def comparison(baseline, candidate, samples):
         return None
     availability = {}
     if any("input_coverage" in row for row in candidate):
-        for signal in ("weekly", "quarterback", "pbp", "weather", "availability"):
+        for signal in ("weekly", "quarterback", "pbp", "weather", "availability", "qb_rushing"):
             available, missing = [], []
             for row in candidate:
                 coverage = row.get("input_coverage", {})
-                if signal in {"weather", "availability"}:
+                if signal in {"weather", "availability", "qb_rushing"}:
                     if signal not in coverage.get("missing", {}):
                         continue
                     present = not coverage["missing"][signal]

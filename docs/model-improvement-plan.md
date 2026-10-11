@@ -3,12 +3,13 @@
 Reviewed on 2026-10-10 at commit
 [`ffc9db23a509accfa72f34b59293dfcf90fe2498`](https://github.com/dwchal/nfl/tree/ffc9db23a509accfa72f34b59293dfcf90fe2498).
 This document proposes future implementation work. The review commit changes
-documentation only. Items 1–4 and 6 have been implemented as recorded below in the
+documentation only. Items 1–6 have been implemented as recorded below in the
 [optimizer record](#item-1-implementation-record) and
 [input-quality record](#item-2-implementation-record) and
 [chronological evaluation record](#item-3-implementation-record) and
 [prospective collection record](#item-4-implementation-record) and
-[reduced-model record](#item-6-implementation-record); items 5 and 7–9 remain
+[starter-uncertainty record](#item-5-implementation-record) and
+[reduced-model record](#item-6-implementation-record); items 7–9 remain
 proposed, along with item 6's deferred recency experiment.
 
 The highest priorities are reliable optimization, honest missing-data handling,
@@ -1043,5 +1044,58 @@ runs produce byte-identical reports; the v1 configuration under the v2 runner
 reproduces every checked-in 2021–2025 forecast. No downloads or forecast
 captures are needed.
 
-The next planned priority is item 5: model quarterback uncertainty and rushing
-contribution.
+## Item 5 implementation record
+
+`Evidence.quarterback_candidates` now orders starter evidence in time: an
+Out/Inactive report issued after a confirmation invalidates it and records the
+conflict; a previous passer absent from the current depth chart is rejected;
+with no depth evidence the fallback is labeled unverified; all candidates ruled
+out yields an explicit unknown. `quarterback()` is the compatibility view of
+the top candidate. `AdvancedState` accumulates labeled starter examples only
+from games with a timestamped candidate list, using the subsequently observed
+leading passer as a proxy outcome and never as an input. With 100 earlier
+examples per evidence class it applies `(top + 1) / (examples + 2)` smoothing
+with add-one rank categories; below that the forecast is exactly the
+deterministic assumption. `corrected_mixture` averages probabilities over
+home × away candidates (equal weights on 0.2 and 0.8 give 0.5); what-if
+selections collapse a side; the unknown candidate passes the empty identifier.
+
+`situations-v2` adds a separate `qb_rushing` aggregate (scrambles and designed
+runs by a player who passed in that game; kneels, spikes and no-plays
+excluded) without changing the team arrays; v1 files stay valid without
+rushing support. `advanced-v6` adds `Quarterback rushing change`: the assumed
+starter's decayed rushing EPA above the league QB mean (50-carry prior) minus
+the team's recent QB rushing contribution under the same decay, so an
+unchanged starter is exactly zero. It is gated on 100 covered training games
+and 20 nonzero observations; being continuous, it is exempt from the
+zero-observation rule. `next_context`, the capture service and the archive now
+carry `qb_candidates`, `starter_scenarios` and `assumption_source`.
+
+The [experiment](experiments/quarterbacks.json) scores passing-only versus
+passing-plus-rushing, each with deterministic and mixture starters, on the
+same 1,359 games; [results](quarterback-model.md) and the
+[full report](quarterback-evaluation.json) are checked in. Deterministic
+passing reproduces `advanced-v5` exactly (Brier 0.222061). The mixture
+activates in 2025 week 4, moves 210 forecasts by 0.001 and scores 0.222071;
+rushing is enabled in every fit with coefficients of −0.0025 to 0.0489 and
+scores 0.222079. Neither passes its separate gate, so the application keeps
+deterministic starters and the passing-only label set
+(`AdvancedModel.mixture = False`, `feature_group = full_passing` in artifacts).
+Nothing is promoted; the default remains Elo. v1 experiment configurations now
+mean the passing-only, deterministic model so earlier reports keep their
+meaning.
+
+New tests cover later-Out conflicts, departed previous passers, all candidates
+ruled out, unknown starters, deterministic exposure, learned probabilities
+summing to one with ruled-out mass sent to unknown, mixture arithmetic and
+exactness, examples drawn only from earlier games with candidate lists,
+what-if collapse and `next_context` output, aggregate exclusions and v1/v2
+validation, verified rushing changes, and the rushing support gate.
+
+**Validation.** All 160 tests pass on Python 3.14.2. Two independent local CLI
+runs produce byte-identical reports. Play-by-play for 2018–2026 was
+re-downloaded once to build `situations-v2`; no other network access was
+needed.
+
+The next planned priority is item 7: weight player absences by expected
+participation, once the availability feed can attest report completeness.

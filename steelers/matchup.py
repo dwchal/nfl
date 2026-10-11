@@ -150,10 +150,11 @@ def replay(games, season, config, bundle, state=None, *, as_of_utc=None):
             continue
         probability = elo_predictions[game.id]
         features = state.features(game)
+        scenarios = state.scenarios(game) if hasattr(state, "scenarios") else []
         result = float(game.home_score > game.away_score) if game.home_score != game.away_score else .5
         rows.append({"id": game.id, "season": game.season, "week": game.week, "kind": game.kind, "home": home, "away": away,
                      "probability": probability, "offset": logit(probability), "features": features,
-                     "input_coverage": state.coverage(game),
+                     "scenarios": scenarios, "input_coverage": state.coverage(game),
                      "result": result, "covered": all(feature_key(game.season, game.week, game.kind, t) in bundle[kind]
                                                          for t in (game.home, game.away) for kind in ("team", "player")),
                      "pbp_covered": all(team_key(t) in getattr(state, "plays", {}).get(game.id, {}) for t in (game.home, game.away))})
@@ -193,6 +194,20 @@ def fit_correction(rows, indices, penalty=.03, fitter=None):
 
 def corrected(probability, features, weights):
     return sigmoid(logit(probability) + sum(w * max(-4, min(4, v)) for w, v in zip(weights, features)))
+
+
+def corrected_mixture(probability, features, scenarios, weights):
+    """Average corrected probabilities over weighted starter scenarios.
+
+    Probabilities are averaged, not logits or ratings. Equal weights on
+    forecasts of 0.2 and 0.8 give 0.5. Without scenarios this is ``corrected``.
+    """
+    if not scenarios:
+        return corrected(probability, features, weights)
+    total = sum(s["weight"] for s in scenarios)
+    if not math.isfinite(total) or total <= 0:
+        raise ValueError("Scenario weights must be positive")
+    return sum(s["weight"] * corrected(probability, s["features"], weights) for s in scenarios) / total
 
 
 @dataclass
@@ -288,6 +303,19 @@ def next_context(model, game, elo_probability, team, bundle, selected_qb="", opp
     probability = model.probability(game, elo_probability, home_qb or None, away_qb or None)
     regular_probability = model.probability(game, elo_probability)
     convert = lambda p: p if game.home == team else 1 - p
+    starters = {}
+    if hasattr(model.state, "scenarios"):
+        # Candidate starters, their probabilities, and the forecast under each
+        # combination. The scenario spread is not a confidence interval.
+        scenarios = model.state.scenarios(game, home_qb or None, away_qb or None)
+        context = model.state.contexts.get(game.id) or model.state.context(game)
+        starters = {"qb_candidates": {code: context["quarterback_candidates"][code] for code in (team, opponent)},
+                    "starter_scenarios": [{"team_qb": s["home_qb"] if game.home == team else s["away_qb"],
+                                           "opponent_qb": s["away_qb"] if game.home == team else s["home_qb"],
+                                           "weight": s["weight"],
+                                           "probability": convert(corrected(elo_probability, s["features"], model.weights))}
+                                          for s in scenarios],
+                    "assumption_source": {code: context["quarterback_candidates"][code]["class"] for code in (team, opponent)}}
     injuries = [r for r in bundle["injuries"] if r["team"] in {team, opponent}
                 and int(r["week"]) == game.week and r.get("game_type", "REG") == game.kind]
     return {"game_id": game.id, "team_qbs": options, "opponent_qbs": opposing,
@@ -301,5 +329,5 @@ def next_context(model, game, elo_probability, team, bundle, selected_qb="", opp
             "injuries": [{"team": r["team"], "name": r["full_name"], "position": r["position"],
                           "status": r["report_status"] or r["practice_status"],
                           "injury": r.get("report_primary_injury") or r.get("practice_primary_injury", "")} for r in injuries],
-            "rest": {"home": game.home_rest, "away": game.away_rest},
+            "rest": {"home": game.home_rest, "away": game.away_rest}, **starters,
             "note": "QB assumptions use the previous game's leading passer, not a confirmed lineup. New or lightly used QBs are shrunk toward league average. Injury reports are context; no unvalidated injury penalties are added."}
